@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IIT Chat</title>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ═══ AUTH SCREEN ═══ -->
+<div id="auth-screen">
+  <div class="ag"></div>
+  <div class="ag2"></div>
+  <div class="acard">
+    <div class="alogo">
+      <div class="ali">💬</div>
+      <div class="alt">IIT <span>Chat</span></div>
+    </div>
+    <div class="atabs">
+      <button class="atab active" onclick="switchTab('login')">Sign In</button>
+      <button class="atab" onclick="switchTab('register')">Sign Up</button>
+    </div>
+
+    <!-- Login -->
+    <div id="lf">
+      <div class="fg">
+        <label>Email</label>
+        <input type="email" id="le" placeholder="your@email.com">
+      </div>
+      <div class="fg">
+        <label>Password</label>
+        <input type="password" id="lp" placeholder="••••••••">
+      </div>
+      <button class="btnp" onclick="doLogin()">
+        <i class="fa fa-sign-in-alt"></i> Sign In
+      </button>
+    </div>
+
+    <!-- Register -->
+    <div id="rf" class="hidden">
+      <div class="fg">
+        <label>Your Name</label>
+        <input type="text" id="rn" placeholder="e.g. Arjun">
+      </div>
+      <div class="fg">
+        <label>Email</label>
+        <input type="email" id="re" placeholder="your@email.com">
+      </div>
+      <div class="fg">
+        <label>Password (min 6 chars)</label>
+        <input type="password" id="rp" placeholder="••••••••">
+      </div>
+      <div class="fg">
+        <label>Pick Avatar</label>
+        <div class="avp">
+          <div class="avo sel" data-av="😎" onclick="selAv(this)">😎</div>
+          <div class="avo" data-av="🧑‍💻" onclick="selAv(this)">🧑‍💻</div>
+          <div class="avo" data-av="🦁" onclick="selAv(this)">🦁</div>
+          <div class="avo" data-av="🐼" onclick="selAv(this)">🐼</div>
+          <div class="avo" data-av="🌙" onclick="selAv(this)">🌙</div>
+          <div class="avo" data-av="⚡" onclick="selAv(this)">⚡</div>
+          <div class="avo" data-av="🌸" onclick="selAv(this)">🌸</div>
+          <div class="avo" data-av="🔥" onclick="selAv(this)">🔥</div>
+        </div>
+      </div>
+      <button class="btnp" onclick="doRegister()">
+        <i class="fa fa-user-plus"></i> Create Account
+      </button>
+    </div>
+    <div class="aerr" id="aerr"></div>
+  </div>
+</div>
+
+<!-- ═══ MAIN APP ═══ -->
+<div id="app">
+  <div class="shell">
+
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+      <div class="sbh">
+        <div class="myav" id="myav" onclick="openSP()">
+          <div class="sd"></div>
+        </div>
+        <div class="sbt">IIT Chat</div>
+        <div class="sbac">
+          <button class="ib" title="Add Friend" onclick="openAC()">
+            <i class="fa fa-user-plus"></i>
+          </button>
+          <button class="ib" title="Settings" onclick="openSP()">
+            <i class="fa fa-cog"></i>
+          </button>
+          <button class="ib" title="Logout" onclick="doLogout()">
+            <i class="fa fa-sign-out-alt"></i>
+          </button>
+        </div>
+      </div>
+      <div class="srch">
+        <div class="sw">
+          <i class="fa fa-search"></i>
+          <input class="sin" id="sinp" placeholder="Search friends..." oninput="filterCL()">
+        </div>
+      </div>
+      <div class="cl" id="cl">
+        <div class="noct">
+          <i class="fa fa-users"></i>
+          <p>No friends yet.<br>Add someone to start!</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- CHAT AREA -->
+    <div class="ca">
+      <!-- Welcome -->
+      <div class="cw" id="cwel">
+        <div class="cwi">💬</div>
+        <h2>Welcome to IIT Chat</h2>
+        <p>Select a friend to start chatting</p>
+        <div class="expb">
+          <i class="fa fa-clock" style="font-size:9px"></i>
+          Messages auto-delete after 3 days
+        </div>
+      </div>
+
+      <!-- Active Chat -->
+      <div id="acd" class="hidden" style="display:flex;flex-direction:column;height:100%">
+        <div class="chd">
+          <div class="chav" id="chav"></div>
+          <div class="chi">
+            <div class="chn" id="chn"></div>
+            <div class="chs" id="chs">offline</div>
+          </div>
+          <div style="display:flex;gap:6px">
+            <button class="ib" title="Clear Chat" onclick="clearChat()">
+              <i class="fa fa-trash"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Messages -->
+        <div class="ma" id="ma"></div>
+
+        <!-- Input -->
+        <div class="ia">
+          <div class="ir">
+            <div class="iw">
+              <button class="eb" onclick="toggleEP()">😊</button>
+              <textarea id="msgi" rows="1" placeholder="Type a message..."
+                onkeydown="onKey(event)" oninput="aRsz(this)"></textarea>
+            </div>
+            <button class="snd" onclick="sendMsg()">
+              <i class="fa fa-paper-plane"></i>
+            </button>
+            <!-- Emoji Picker -->
+            <div class="epnl hidden" id="epnl">
+              <div class="ecats">
+                <button class="ecb act" onclick="showCat('smileys',this)">😀</button>
+                <button class="ecb" onclick="showCat('love',this)">❤️</button>
+                <button class="ecb" onclick="showCat('hands',this)">👋</button>
+                <button class="ecb" onclick="showCat('nature',this)">🌿</button>
+                <button class="ecb" onclick="showCat('food',this)">🍕</button>
+                <button class="ecb" onclick="showCat('symbols',this)">💯</button>
+              </div>
+              <div class="egr" id="egr"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ ADD FRIEND MODAL ═══ -->
+<div class="ovl" id="acm">
+  <div class="modal">
+    <h3>➕ Add Friend</h3>
+    <div class="fg">
+      <label>Friend's Email</label>
+      <input type="email" id="fem" placeholder="friend@email.com">
+    </div>
+    <div class="aerr" id="ferr"></div>
+    <div class="mact">
+      <button class="btns" onclick="closeAC()">Cancel</button>
+      <button class="btnp" style="flex:1" onclick="addFriend()">Add</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SETTINGS PANEL ═══ -->
+<div class="spp" id="spp" onclick="closeSP(event)">
+  <div class="spc">
+    <h3>⚙️ Settings</h3>
+    <div class="fg" style="margin-bottom:20px">
+      <label>Profile</label>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:8px">
+        <div style="font-size:34px" id="spav"></div>
+        <div>
+          <div style="font-weight:600" id="spnm"></div>
+          <div style="font-size:11px;color:var(--text2)" id="spem"></div>
+        </div>
+      </div>
+    </div>
+    <div class="fg">
+      <label>Theme</label>
+      <div class="thg">
+        <div class="thb dark" onclick="setTheme('dark')">🌙 Dark</div>
+        <div class="thb light" onclick="setTheme('light')">☀️ Light</div>
+        <div class="thb romantic" onclick="setTheme('romantic')">🌹 Romantic</div>
+        <div class="thb neon" onclick="setTheme('neon')">⚡ Neon</div>
+      </div>
+    </div>
+    <div style="margin-top:14px;padding:11px;background:var(--bg3);border-radius:10px;font-size:12px;color:var(--text2);">
+      <i class="fa fa-clock" style="margin-right:5px;color:var(--accent)"></i>
+      Messages auto-delete after <strong>3 days</strong>
+    </div>
+    <div style="margin-top:18px">
+      <button class="btnp" onclick="doLogout()">
+        <i class="fa fa-sign-out-alt" style="margin-right:6px"></i>Logout
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script src="app.js" type="module"></script>
+</body>
+</html>

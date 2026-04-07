@@ -563,6 +563,41 @@ body {
 }
 .lb-x:hover { background: rgba(255,255,255,0.25); }
 
+/* ── LIVE REACTIONS ── */
+.lrp {
+  position: absolute; right: 0; top: calc(100% + 8px);
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 18px; padding: 10px 14px;
+  display: flex; gap: 8px; z-index: 100;
+  box-shadow: var(--shadow); animation: pI 0.18s ease;
+  white-space: nowrap;
+}
+.lre {
+  font-size: 28px; cursor: pointer;
+  transition: transform 0.15s; display: inline-block;
+  line-height: 1;
+}
+.lre:hover { transform: scale(1.4); }
+
+.rcanvas {
+  position: absolute; inset: 0;
+  pointer-events: none; z-index: 20;
+  overflow: hidden;
+}
+.lr-float {
+  position: absolute; bottom: 70px;
+  font-size: 44px; line-height: 1;
+  animation: lrFloat 2.8s cubic-bezier(0.2, 0.8, 0.4, 1) forwards;
+  filter: drop-shadow(0 3px 10px rgba(0,0,0,0.35));
+  will-change: transform, opacity;
+}
+@keyframes lrFloat {
+  0%   { transform: translateY(0)    scale(0.3) rotate(0deg);            opacity: 0; }
+  12%  { transform: translateY(-20px) scale(1.4) rotate(var(--rot));     opacity: 1; }
+  60%  { transform: translateY(-180px) scale(1.1) rotate(calc(var(--rot) * -0.7)); opacity: 0.95; }
+  100% { transform: translateY(-340px) scale(0.7) rotate(var(--rot));    opacity: 0; }
+}
+
 /* ── TYPING INDICATOR ── */
 .chs.typing {
   color: var(--accent) !important;

@@ -15,7 +15,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import {
   getDatabase,
-  ref, set, get, push, onValue, update, remove
+  ref, set, get, push, onValue, onChildAdded, update, remove
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
 // ══════════════════════════════════════════════════════
@@ -52,6 +52,7 @@ let CCI      = null;   // current chat id
 let CCT      = null;   // current contact object
 let contacts = {};
 let unsub    = null;   // unsubscribe listener
+let unsubLR  = null;   // live reactions listener
 
 // ═══════════════════════════════════════
 //  AUTH
@@ -280,6 +281,17 @@ async function openChat(uid, u) {
     } else {
       renderStatus();
     }
+  });
+
+  // live reactions listener
+  if (unsubLR) unsubLR();
+  unsubLR = onChildAdded(ref(db, `liveReactions/${CCI}`), snap => {
+    const d = snap.val();
+    if (!d || !d.emoji) return;
+    if (Date.now() - d.ts > 5000) return;   // ignore stale
+    if (d.uid === CU.uid) return;            // already shown locally
+    showReactionAnim(d.emoji);
+    setTimeout(() => remove(snap.ref), 3200);
   });
 
   loadMsgs();
@@ -585,6 +597,47 @@ function escHtml(s) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
 }
+
+// ═══════════════════════════════════════
+//  LIVE REACTIONS (Google Meet style)
+// ═══════════════════════════════════════
+const LIVE_REACTS = ['❤️','😂','😍','😮','😢','👍','🔥','🎉','🤗','💋'];
+
+window.toggleLRP = () => {
+  const lrp = el('lrp');
+  if (lrp.classList.contains('hidden')) {
+    lrp.innerHTML = LIVE_REACTS.map(r =>
+      `<span class="lre" onclick="sendLiveReact('${r}')">${r}</span>`
+    ).join('');
+    lrp.classList.remove('hidden');
+  } else {
+    lrp.classList.add('hidden');
+  }
+};
+
+window.sendLiveReact = async emoji => {
+  el('lrp').classList.add('hidden');
+  showReactionAnim(emoji);   // show locally immediately
+  const r = await push(ref(db, `liveReactions/${CCI}`), { emoji, uid: CU.uid, ts: Date.now() });
+  setTimeout(() => remove(r), 3500);
+};
+
+function showReactionAnim(emoji) {
+  const canvas = el('rcanvas');
+  if (!canvas) return;
+  const div = document.createElement('div');
+  div.className   = 'lr-float';
+  div.textContent = emoji;
+  div.style.left  = (5 + Math.random() * 65) + '%';
+  div.style.setProperty('--rot', (Math.random() * 30 - 15) + 'deg');
+  canvas.appendChild(div);
+  setTimeout(() => div.remove(), 3200);
+}
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('#lrp') && !e.target.closest('#lrb'))
+    el('lrp')?.classList.add('hidden');
+});
 
 // ── TYPING INDICATOR ──
 let typingTimer;

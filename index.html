@@ -125,19 +125,24 @@
       </div>
 
       <!-- Active Chat -->
-      <div id="acd" class="hidden" style="display:flex;flex-direction:column;height:100%">
+      <div id="acd" class="hidden" style="display:flex;flex-direction:column;height:100%;position:relative">
         <div class="chd">
           <div class="chav" id="chav"></div>
           <div class="chi">
             <div class="chn" id="chn"></div>
             <div class="chs" id="chs">offline</div>
           </div>
-          <div style="display:flex;gap:6px">
+          <div style="display:flex;gap:6px;position:relative">
+            <button class="ib" id="lrb" title="Live Reaction" onclick="toggleLRP()">❤️</button>
             <button class="ib" title="Clear Chat" onclick="clearChat()">
               <i class="fa fa-trash"></i>
             </button>
+            <div class="lrp hidden" id="lrp"></div>
           </div>
         </div>
+
+        <!-- Floating reaction canvas -->
+        <div id="rcanvas" class="rcanvas"></div>
 
         <!-- Messages -->
         <div class="ma" id="ma"></div>

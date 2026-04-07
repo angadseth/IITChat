@@ -37,6 +37,13 @@ const fbApp = initializeApp(FC);
 const auth  = getAuth(fbApp);
 const db    = getDatabase(fbApp);
 
+// ══════════════════════════════════════════════════════
+// 📸 IMGBB API KEY — imgbb.com pe free account banao
+//    Login → apna naam → API → key copy karo
+// ══════════════════════════════════════════════════════
+const IMGBB_KEY = 'e9167e60305454e517e135847608509d';
+// ══════════════════════════════════════════════════════
+
 const THREE_DAYS = 3 * 24 * 60 * 60 * 1000;   // ms
 
 // ── state ──
@@ -185,7 +192,7 @@ function loadContacts() {
         </div>
         <div class="cii">
           <div class="cin">${u.name}</div>
-          <div class="cip">${lm ? (lm.type === 'text' ? lm.text.substring(0, 35) : '📎') : 'Say hi! 👋'}</div>
+          <div class="cip">${lmPreview(lm)}</div>
         </div>
         <div class="cim">
           <div class="cit">${lm ? fmtTime(lm.ts) : ''}</div>
@@ -282,24 +289,47 @@ function loadMsgs() {
   });
 }
 
+function mkBody(msg, isMe) {
+  if (msg.type === 'text') return escHtml(msg.text).replace(/\n/g, '<br>');
+  if (msg.type === 'image') {
+    if (msg.viewOnce) {
+      const viewed = msg.viewedBy?.[CU.uid];
+      if (isMe)   return `<div class="vo-bub sent"><i class="fa fa-eye"></i> View once${viewed ? ' · <span style="font-size:10px;opacity:.6">Seen</span>' : ''}</div>`;
+      if (viewed) return `<div class="vo-bub opened"><i class="fa fa-eye-slash"></i> Photo opened</div>`;
+      return `<div class="vo-bub tap"><i class="fa fa-eye"></i> Tap to view</div>`;
+    }
+    return `<img class="mimg" src="${msg.url}" loading="lazy">`;
+  }
+  if (msg.type === 'video') {
+    return `<video class="mvid" controls preload="metadata"><source src="${msg.url}"></video>`;
+  }
+  if (msg.type === 'document') {
+    const name = escHtml(msg.name || 'Document');
+    const size = fmtSize(msg.size);
+    return `<a class="mdoc" href="${msg.url}" target="_blank" download="${name}">
+      <i class="fa fa-file-alt"></i>
+      <div class="mdoc-info"><div class="mdoc-name">${name}</div>${size ? `<div class="mdoc-size">${size}</div>` : ''}</div>
+      <i class="fa fa-download" style="opacity:.5;flex-shrink:0"></i>
+    </a>`;
+  }
+  return '';
+}
+
 function mkMsg(msg, isMe, con) {
   const row = document.createElement('div');
   row.className = `mr ${isMe ? 'me' : 'them'}${con ? ' con' : ''}`;
 
-  const body = msg.type === 'text'
-    ? escHtml(msg.text).replace(/\n/g, '<br>')
-    : '';
-
-  const rHtml  = mkReacts(msg);
+  const body    = mkBody(msg, isMe);
+  const rHtml   = mkReacts(msg);
   const expLeft = THREE_DAYS - (Date.now() - msg.ts);
-  const expH   = Math.max(0, Math.round(expLeft / 3_600_000));
+  const expH    = Math.max(0, Math.round(expLeft / 3_600_000));
 
   row.innerHTML = `
     ${!isMe ? `<div class="mav">${CCT?.avatar || '👤'}</div>` : ''}
     <div class="mc">
       ${!isMe && !con ? `<div class="msn">${CCT?.name || ''}</div>` : ''}
       <div class="bw">
-        <div class="bub" onclick="showRP(event,this,'${msg.id}')">${body}</div>
+        <div class="bub" onclick="showRP(event,this,'${msg.id}',${isMe})">${body}</div>
       </div>
       ${rHtml ? `<div class="rcts">${rHtml}</div>` : ''}
       <div class="mm">
@@ -308,6 +338,13 @@ function mkMsg(msg, isMe, con) {
         ${isMe ? '<span class="mck"><i class="fa fa-check-double"></i></span>' : ''}
       </div>
     </div>`;
+
+  // attach media event listeners (avoids URL-escaping issues in inline handlers)
+  row.querySelector('.mimg')?.addEventListener('click', e => { e.stopPropagation(); openImg(msg.url); });
+  row.querySelector('.mvid')?.addEventListener('click', e => e.stopPropagation());
+  row.querySelector('.mdoc')?.addEventListener('click', e => e.stopPropagation());
+  row.querySelector('.vo-bub.tap')?.addEventListener('click', e => { e.stopPropagation(); viewOnce(msg.id, msg.url); });
+
   return row;
 }
 
@@ -327,17 +364,43 @@ function mkReacts(msg) {
 // ── REACTIONS ──
 const REACTS = ['❤️','😂','😮','😢','👍','🔥','🎉','😍','💀','🤣'];
 
-window.showRP = (e, bub, mid) => {
+window.showRP = (e, bub, mid, isMe) => {
   e.stopPropagation();
   document.querySelectorAll('.rpk').forEach(p => p.remove());
   const picker = document.createElement('div');
   picker.className = 'rpk';
-  picker.innerHTML = REACTS.map(r =>
+  let html = REACTS.map(r =>
     `<span onclick="addRct('${mid}','${r}');this.closest('.rpk').remove()">${r}</span>`
   ).join('');
+  if (isMe) html += `<span class="rpk-del" title="Delete" onclick="delMsg('${mid}');this.closest('.rpk').remove()">🗑️</span>`;
+  picker.innerHTML = html;
   bub.appendChild(picker);
   setTimeout(() => document.addEventListener('click', () => picker.remove(), { once: true }), 50);
 };
+
+window.delMsg = async mid => {
+  if (!confirm('Delete this message?')) return;
+  await remove(ref(db, `chats/${CCI}/messages/${mid}`));
+  const ms = await get(ref(db, `chats/${CCI}/messages`));
+  if (!ms.exists()) {
+    await remove(ref(db, `chats/${CCI}/lastMessage`));
+  } else {
+    const all = Object.values(ms.val()).sort((a, b) => a.ts - b.ts);
+    await set(ref(db, `chats/${CCI}/lastMessage`), all[all.length - 1]);
+  }
+};
+
+function openImg(url) {
+  el('lbimg').src = url;
+  el('lb').classList.remove('hidden');
+}
+
+async function viewOnce(mid, url) {
+  await update(ref(db, `chats/${CCI}/messages/${mid}/viewedBy`), { [CU.uid]: true });
+  openImg(url);
+}
+
+window.closeLB = e => { if (e.target === el('lb')) el('lb').classList.add('hidden'); };
 
 window.addRct = async (mid, em) => {
   await update(ref(db, `chats/${CCI}/messages/${mid}/reactions`), { [CU.uid]: em });
@@ -391,7 +454,58 @@ const EMOJIS = {
   symbols: ['💯','🔥','✨','⭐','🌟','💥','❓','❗','‼️','🆘','🆒','🆕','🆙','🆓','🚫','⛔','✅','❌','🔴','🟠','🟡','🟢','🔵','🟣','⚫','⚪','♾️','💤','🎉','🎊','🏆','🥇','💎','🔑','🎯']
 };
 
-window.toggleEP = () => el('epnl').classList.toggle('hidden');
+window.toggleEP = () => {
+  el('amnl').classList.add('hidden');
+  el('epnl').classList.toggle('hidden');
+};
+
+window.toggleAM = () => {
+  el('epnl').classList.add('hidden');
+  el('amnl').classList.toggle('hidden');
+};
+
+window.pickFile = type => {
+  el('amnl').classList.add('hidden');
+  if (!CCI) { toast('Open a chat first'); return; }
+  if (type === 'media') el('fi-media').click();
+  else                  el('fi-vo').click();
+};
+
+async function handleFilePick(e, type) {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  if (!file.type.startsWith('image/')) { toast('❌ Sirf images supported hain'); return; }
+  if (file.size > 10 * 1024 * 1024)   { toast('❌ Max image size: 10 MB'); return; }
+  if (!IMGBB_KEY || IMGBB_KEY === 'YOUR_IMGBB_API_KEY_HERE') {
+    toast('❌ app.js mein ImgBB API key daalo pehle'); return;
+  }
+  toast('⏫ Uploading...');
+  try {
+    const b64  = await toBase64(file);
+    const form = new FormData();
+    form.append('image', b64.split(',')[1]);
+    const res  = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_KEY}`, { method: 'POST', body: form });
+    const json = await res.json();
+    if (!json.success) throw new Error(json.error?.message || 'Upload failed');
+    const data = { type: 'image', url: json.data.url, name: file.name, size: file.size };
+    if (type === 'viewonce') data.viewOnce = true;
+    await sendData(data);
+    toast('✅ Sent!');
+  } catch (err) {
+    console.error(err);
+    toast('❌ Upload failed: ' + err.message);
+  }
+}
+
+function toBase64(file) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload  = () => res(r.result);
+    r.onerror = rej;
+    r.readAsDataURL(file);
+  });
+}
 
 window.showCat = (cat, btn) => {
   document.querySelectorAll('.ecb').forEach(b => b.classList.remove('act'));
@@ -406,6 +520,8 @@ window.insE = em => { const i = el('msgi'); i.value += em; i.focus(); };
 document.addEventListener('click', e => {
   if (!e.target.closest('.epnl') && !e.target.closest('.eb'))
     el('epnl')?.classList.add('hidden');
+  if (!e.target.closest('.amnl') && e.target.id !== 'amb' && !e.target.closest('#amb'))
+    el('amnl')?.classList.add('hidden');
 });
 
 // ═══════════════════════════════════════
@@ -462,6 +578,26 @@ function escHtml(s) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
 }
+
+function fmtSize(bytes) {
+  if (!bytes) return '';
+  if (bytes < 1024)        return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function lmPreview(lm) {
+  if (!lm) return 'Say hi! 👋';
+  if (lm.type === 'text')     return lm.text.substring(0, 35);
+  if (lm.type === 'image')    return lm.viewOnce ? '👁️ View once' : '📷 Photo';
+  if (lm.type === 'video')    return '🎥 Video';
+  if (lm.type === 'document') return '📄 ' + (lm.name || 'Document');
+  return '📎';
+}
+
+// ── file input listeners ──
+el('fi-media').addEventListener('change', e => handleFilePick(e, 'media'));
+el('fi-vo').addEventListener('change',    e => handleFilePick(e, 'viewonce'));
 
 // ── init ──
 applyTheme(localStorage.getItem('iitchat-theme') || 'dark');

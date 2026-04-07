@@ -147,12 +147,19 @@
           <div class="ir">
             <div class="iw">
               <button class="eb" onclick="toggleEP()">😊</button>
+              <button class="eb" id="amb" onclick="toggleAM()" title="Attach file"><i class="fa fa-paperclip"></i></button>
               <textarea id="msgi" rows="1" placeholder="Type a message..."
                 onkeydown="onKey(event)" oninput="aRsz(this)"></textarea>
             </div>
             <button class="snd" onclick="sendMsg()">
               <i class="fa fa-paper-plane"></i>
             </button>
+            <!-- Attach Menu -->
+            <div class="amnl hidden" id="amnl">
+              <div class="amo" onclick="pickFile('media')"><i class="fa fa-image" style="color:#6c63ff"></i> Photo</div>
+              <div class="amo" onclick="pickFile('viewonce')"><i class="fa fa-eye" style="color:#ff6584"></i> View Once Photo</div>
+            </div>
+
             <!-- Emoji Picker -->
             <div class="epnl hidden" id="epnl">
               <div class="ecats">
@@ -225,6 +232,16 @@
 
 <!-- Toast -->
 <div class="toast" id="toast"></div>
+
+<!-- Hidden file inputs -->
+<input type="file" id="fi-media" accept="image/*" hidden>
+<input type="file" id="fi-vo"    accept="image/*" hidden>
+
+<!-- Lightbox -->
+<div class="lb hidden" id="lb" onclick="closeLB(event)">
+  <button class="lb-x" onclick="event.stopPropagation();el('lb').classList.add('hidden')">✕</button>
+  <img id="lbimg" src="" onclick="event.stopPropagation()">
+</div>
 
 <script src="app.js" type="module"></script>
 </body>

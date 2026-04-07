@@ -578,6 +578,13 @@ body {
   line-height: 1;
 }
 .lre:hover { transform: scale(1.4); }
+.lrx {
+  font-size: 14px; cursor: pointer; color: var(--text2);
+  padding: 2px 6px; border-radius: 50%; background: var(--bg3);
+  display: flex; align-items: center; justify-content: center;
+  align-self: center; transition: var(--tr); flex-shrink: 0;
+}
+.lrx:hover { background: var(--red); color: #fff; }
 
 .rcanvas {
   position: absolute; inset: 0;

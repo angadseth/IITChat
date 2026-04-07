@@ -131,6 +131,7 @@ onAuthStateChanged(auth, async u => {
     applyTheme(localStorage.getItem('iitchat-theme') || 'dark');
     loadContacts();
     autoClean();
+    initNotifications();
   } else {
     CU = null;
     el('auth-screen').style.display = 'flex';
@@ -164,6 +165,8 @@ async function autoClean() {
 function loadContacts() {
   onValue(ref(db, `contacts/${CU.uid}`), async snap => {
     contacts = {};
+    notifUnsubs.forEach(u => u());
+    notifUnsubs = [];
     const cl   = el('cl');
     cl.innerHTML = '';
     const data = snap.val() || {};
@@ -207,6 +210,7 @@ function loadContacts() {
         </div>`;
       item.onclick = () => openChat(uid, u);
       cl.appendChild(item);
+      setupNotifForContact(uid, u.name, u.avatar || '💬');
     }
   });
 }
@@ -606,9 +610,9 @@ const LIVE_REACTS = ['❤️','😂','😍','😮','😢','👍','🔥','🎉','
 window.toggleLRP = () => {
   const lrp = el('lrp');
   if (lrp.classList.contains('hidden')) {
-    lrp.innerHTML = LIVE_REACTS.map(r =>
-      `<span class="lre" onclick="sendLiveReact('${r}')">${r}</span>`
-    ).join('');
+    lrp.innerHTML =
+      LIVE_REACTS.map(r => `<span class="lre" onclick="sendLiveReact('${r}')">${r}</span>`).join('') +
+      `<span class="lrx" onclick="el('lrp').classList.add('hidden')" title="Close">✕</span>`;
     lrp.classList.remove('hidden');
   } else {
     lrp.classList.add('hidden');
@@ -641,10 +645,56 @@ function spawnOneEmoji(emoji) {
   setTimeout(() => div.remove(), 3200);
 }
 
-document.addEventListener('click', e => {
-  if (!e.target.closest('#lrp') && !e.target.closest('#lrb'))
-    el('lrp')?.classList.add('hidden');
-});
+// lrp panel sirf X button se band hoga — click bahar se nahi
+
+// ═══════════════════════════════════════
+//  NOTIFICATIONS
+// ═══════════════════════════════════════
+let notifUnsubs = [];
+
+async function initNotifications() {
+  if (!('Notification' in window)) return;
+  if (Notification.permission === 'default') {
+    await Notification.requestPermission();
+  }
+}
+
+function setupNotifForContact(uid, uName, uAvatar) {
+  const chatId   = cid(CU.uid, uid);
+  let lastSeenTs = Date.now();  // ignore old messages on init
+
+  const unsub = onValue(ref(db, `chats/${chatId}/messages`), snap => {
+    if (!snap.exists()) return;
+    const msgs = Object.values(snap.val()).sort((a, b) => a.ts - b.ts);
+    const latest = msgs[msgs.length - 1];
+    if (!latest || latest.sender === CU.uid) return;
+    if (latest.ts <= lastSeenTs) return;
+    lastSeenTs = latest.ts;
+
+    // tab active hai aur ye hi chat open hai — no notification
+    if (!document.hidden && CCI === chatId) return;
+
+    if (Notification.permission !== 'granted') return;
+
+    const body = latest.type === 'text'
+      ? latest.text.substring(0, 80)
+      : latest.type === 'image' ? '📷 Photo'
+      : latest.type === 'video' ? '🎥 Video'
+      : '📎 File';
+
+    const n = new Notification(`${uAvatar} ${uName}`, {
+      body,
+      icon: 'https://cdn.jsdelivr.net/npm/twemoji@14/assets/72x72/1f4ac.png',
+      badge: 'https://cdn.jsdelivr.net/npm/twemoji@14/assets/72x72/1f4ac.png',
+      tag: chatId,
+      renotify: true,
+      vibrate: [120, 60, 120]
+    });
+    n.onclick = () => { window.focus(); n.close(); };
+  });
+
+  notifUnsubs.push(unsub);
+}
 
 // ── TYPING INDICATOR ──
 let typingTimer;

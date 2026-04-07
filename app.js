@@ -15,7 +15,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import {
   getDatabase,
-  ref, set, get, push, onValue, onChildAdded, update, remove
+  ref, set, get, push, onValue, onChildAdded, update, remove, onDisconnect, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
 // ══════════════════════════════════════════════════════
@@ -113,7 +113,20 @@ function setAErr(m) { el('aerr').textContent = m; }
 onAuthStateChanged(auth, async u => {
   if (u) {
     CU = u;
-    await update(ref(db, `users/${u.uid}`), { online: true, lastSeen: Date.now() });
+    const uRef = ref(db, `users/${u.uid}`);
+    await update(uRef, { online: true, lastSeen: Date.now() });
+
+    // Firebase onDisconnect — tab band, network cut, kuch bhi ho — auto offline
+    await onDisconnect(uRef).update({ online: false, lastSeen: serverTimestamp() });
+
+    // Tab hide/show (dusre tab pe switch karna)
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        update(uRef, { online: false, lastSeen: Date.now() });
+      } else {
+        update(uRef, { online: true, lastSeen: Date.now() });
+      }
+    });
 
     const snap = await get(ref(db, `users/${u.uid}`));
     const pr   = snap.val() || {};

@@ -147,6 +147,18 @@
         <!-- Messages -->
         <div class="ma" id="ma"></div>
 
+        <!-- Reply Bar -->
+        <div class="reply-bar hidden" id="reply-bar">
+          <div class="reply-bar-inner">
+            <i class="fa fa-reply" style="color:var(--accent);font-size:13px"></i>
+            <div class="reply-bar-text">
+              <div class="reply-bar-name" id="reply-name"></div>
+              <div class="reply-bar-preview" id="reply-preview"></div>
+            </div>
+          </div>
+          <button class="reply-bar-x" onclick="cancelReply()">✕</button>
+        </div>
+
         <!-- Input -->
         <div class="ia">
           <div class="ir">

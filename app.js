@@ -53,6 +53,7 @@ let CCT      = null;   // current contact object
 let contacts = {};
 let unsub    = null;   // unsubscribe listener
 let unsubLR  = null;   // live reactions listener
+let replyTo  = null;   // { id, text, senderName }
 
 // ═══════════════════════════════════════
 //  AUTH
@@ -359,18 +360,25 @@ function mkBody(msg, isMe) {
 function mkMsg(msg, isMe, con) {
   const row = document.createElement('div');
   row.className = `mr ${isMe ? 'me' : 'them'}${con ? ' con' : ''}`;
+  row.dataset.mid = msg.id;
 
   const body    = mkBody(msg, isMe);
   const rHtml   = mkReacts(msg);
   const expLeft = THREE_DAYS - (Date.now() - msg.ts);
   const expH    = Math.max(0, Math.round(expLeft / 3_600_000));
 
+  const replyHtml = msg.replyTo ? `
+    <div class="rp-quote" onclick="scrollToMsg('${msg.replyTo.id}')">
+      <div class="rp-qname">${escHtml(msg.replyTo.senderName)}</div>
+      <div class="rp-qtext">${escHtml(msg.replyTo.text).substring(0, 80)}</div>
+    </div>` : '';
+
   row.innerHTML = `
     ${!isMe ? `<div class="mav">${CCT?.avatar || '👤'}</div>` : ''}
     <div class="mc">
       ${!isMe && !con ? `<div class="msn">${CCT?.name || ''}</div>` : ''}
       <div class="bw">
-        <div class="bub" onclick="showRP(event,this,'${msg.id}',${isMe})">${body}</div>
+        <div class="bub" onclick="showRP(event,this,'${msg.id}',${isMe})">${replyHtml}${body}</div>
       </div>
       ${rHtml ? `<div class="rcts">${rHtml}</div>` : ''}
       <div class="mm">
@@ -408,15 +416,36 @@ const REACTS = ['❤️','😂','😮','😢','👍','🔥','🎉','😍','💀'
 window.showRP = (e, bub, mid, isMe) => {
   e.stopPropagation();
   document.querySelectorAll('.rpk').forEach(p => p.remove());
+
+  // find msg data from current rendered messages
+  const msgRow = bub.closest('.mr');
+  const msgText = msgRow?.querySelector('.bub')?.innerText?.trim() || '';
+  const senderName = isMe ? (CU.displayName || 'You') : (CCT?.name || '');
+
   const picker = document.createElement('div');
   picker.className = 'rpk';
-  let html = REACTS.map(r =>
+  let html = `<span class="rpk-reply" title="Reply" onclick="setReply('${mid}','${escJs(msgText)}','${escJs(senderName)}');this.closest('.rpk').remove()">↩️</span>`;
+  html += REACTS.map(r =>
     `<span onclick="addRct('${mid}','${r}');this.closest('.rpk').remove()">${r}</span>`
   ).join('');
   if (isMe) html += `<span class="rpk-del" title="Delete" onclick="delMsg('${mid}');this.closest('.rpk').remove()">🗑️</span>`;
   picker.innerHTML = html;
   bub.appendChild(picker);
   setTimeout(() => document.addEventListener('click', () => picker.remove(), { once: true }), 50);
+};
+
+window.setReply = (id, text, senderName) => {
+  replyTo = { id, text, senderName };
+  const bar = el('reply-bar');
+  el('reply-name').textContent = senderName;
+  el('reply-preview').textContent = text.length > 60 ? text.substring(0, 60) + '…' : text;
+  bar.classList.remove('hidden');
+  el('msgi').focus();
+};
+
+window.cancelReply = () => {
+  replyTo = null;
+  el('reply-bar').classList.add('hidden');
 };
 
 window.delMsg = async mid => {
@@ -477,7 +506,12 @@ window.sendMsg = async () => {
   if (!text || !CCI) return;
   inp.value = '';
   inp.style.height = 'auto';
-  await sendData({ type: 'text', text });
+  const data = { type: 'text', text };
+  if (replyTo) {
+    data.replyTo = { id: replyTo.id, text: replyTo.text, senderName: replyTo.senderName };
+    cancelReply();
+  }
+  await sendData(data);
 };
 
 window.onKey  = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMsg(); } };
@@ -593,6 +627,18 @@ function el(id) { return document.getElementById(id); }
 function fmtTime(ts) {
   if (!ts) return '';
   return new Date(ts).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+}
+
+window.scrollToMsg = id => {
+  const target = el('ma')?.querySelector(`[data-mid="${id}"]`);
+  if (!target) return;
+  target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  target.classList.add('msg-highlight');
+  setTimeout(() => target.classList.remove('msg-highlight'), 1500);
+};
+
+function escJs(s) {
+  return (s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, ' ');
 }
 
 function escHtml(s) {

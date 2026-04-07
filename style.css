@@ -492,6 +492,45 @@ body {
 }
 .toast.show { transform: translateX(-50%) translateY(0); }
 
+/* ── REPLY BAR ── */
+.reply-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 18px; background: var(--bg2);
+  border-top: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  gap: 10px;
+}
+.reply-bar-inner { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+.reply-bar-text  { min-width: 0; }
+.reply-bar-name  { font-size: 11px; font-weight: 700; color: var(--accent); }
+.reply-bar-preview { font-size: 12px; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.reply-bar-x {
+  background: none; border: none; color: var(--text2);
+  font-size: 14px; cursor: pointer; padding: 2px 6px;
+  transition: var(--tr); flex-shrink: 0;
+}
+.reply-bar-x:hover { color: var(--red); }
+
+/* ── REPLY QUOTE (inside bubble) ── */
+.rp-quote {
+  background: rgba(255,255,255,0.08);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px; padding: 5px 9px;
+  margin-bottom: 6px; cursor: pointer;
+  transition: background 0.15s;
+}
+.mr.me .rp-quote { background: rgba(0,0,0,0.15); }
+.rp-quote:hover   { background: rgba(255,255,255,0.15); }
+.rp-qname { font-size: 10px; font-weight: 700; color: var(--accent); margin-bottom: 2px; }
+.rp-qtext { font-size: 11px; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
+
+/* ── SCROLL HIGHLIGHT ── */
+@keyframes msgFlash { 0%,100%{background:transparent} 40%{background:rgba(108,99,255,0.25)} }
+.msg-highlight .bub { animation: msgFlash 1.5s ease; }
+
+/* ── REPLY BUTTON in reaction picker ── */
+.rpk-reply { border-right: 1px solid var(--border); padding-right: 7px; margin-right: 2px; }
+
 /* ── ATTACH MENU ── */
 .amnl {
   position: absolute; bottom: calc(100% + 10px); left: 0;

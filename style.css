@@ -563,6 +563,13 @@ body {
 }
 .lb-x:hover { background: rgba(255,255,255,0.25); }
 
+/* ── TYPING INDICATOR ── */
+.chs.typing {
+  color: var(--accent) !important;
+  animation: typingPulse 1s ease-in-out infinite;
+}
+@keyframes typingPulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+
 /* Reaction picker — delete button */
 .rpk-del {
   border-left: 1px solid var(--border);

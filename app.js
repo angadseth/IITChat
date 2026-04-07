@@ -173,15 +173,22 @@ function loadContacts() {
       return;
     }
 
-    for (const uid of uids) {
-      const us = await get(ref(db, `users/${uid}`));
+    // fetch all users + lastMessages in parallel (much faster)
+    const results = await Promise.all(uids.map(async uid => {
+      const chatId = cid(CU.uid, uid);
+      const [us, lmSnap] = await Promise.all([
+        get(ref(db, `users/${uid}`)),
+        get(ref(db, `chats/${chatId}/lastMessage`))
+      ]);
+      return { uid, us, lm: lmSnap.val() };
+    }));
+
+    for (const { uid, us, lm } of results) {
       if (!us.exists()) continue;
       const u = us.val();
       contacts[uid] = u;
 
       const chatId = cid(CU.uid, uid);
-      const lm     = (await get(ref(db, `chats/${chatId}/lastMessage`))).val();
-
       const item = document.createElement('div');
       item.className    = 'ci' + (CCI === chatId ? ' act' : '');
       item.dataset.uid  = uid;
@@ -250,12 +257,30 @@ async function openChat(uid, u) {
   el('chn').textContent  = u.name;
 
   const chs = el('chs');
-  const setStatus = online => {
-    chs.textContent  = online ? '● Online' : 'Last seen recently';
-    chs.className    = 'chs' + (online ? ' on' : '');
+  let contactOnline = u.online;
+
+  const renderStatus = async () => {
+    if (contactOnline) {
+      chs.textContent = '● Online';
+      chs.className   = 'chs on';
+    } else {
+      const lsSnap = await get(ref(db, `users/${uid}/lastSeen`));
+      const ts     = lsSnap.val();
+      chs.textContent = ts ? 'Last seen ' + fmtLastSeen(ts) : 'Offline';
+      chs.className   = 'chs';
+    }
   };
-  setStatus(u.online);
-  onValue(ref(db, `users/${uid}/online`), s => setStatus(s.val()));
+
+  renderStatus();
+  onValue(ref(db, `users/${uid}/online`), s => { contactOnline = s.val(); renderStatus(); });
+  onValue(ref(db, `users/${uid}/typingIn`), s => {
+    if (s.val() === CCI) {
+      chs.textContent = 'typing...';
+      chs.className   = 'chs typing';
+    } else {
+      renderStatus();
+    }
+  });
 
   loadMsgs();
 }
@@ -466,6 +491,7 @@ window.toggleAM = () => {
 
 window.pickFile = type => {
   el('amnl').classList.add('hidden');
+  if (type === 'camera') { openCAM(); return; }
   if (!CCI) { toast('Open a chat first'); return; }
   if (type === 'media') el('fi-media').click();
   else                  el('fi-vo').click();
@@ -476,26 +502,7 @@ async function handleFilePick(e, type) {
   e.target.value = '';
   if (!file) return;
   if (!file.type.startsWith('image/')) { toast('❌ Sirf images supported hain'); return; }
-  if (file.size > 10 * 1024 * 1024)   { toast('❌ Max image size: 10 MB'); return; }
-  if (!IMGBB_KEY || IMGBB_KEY === 'YOUR_IMGBB_API_KEY_HERE') {
-    toast('❌ app.js mein ImgBB API key daalo pehle'); return;
-  }
-  toast('⏫ Uploading...');
-  try {
-    const b64  = await toBase64(file);
-    const form = new FormData();
-    form.append('image', b64.split(',')[1]);
-    const res  = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_KEY}`, { method: 'POST', body: form });
-    const json = await res.json();
-    if (!json.success) throw new Error(json.error?.message || 'Upload failed');
-    const data = { type: 'image', url: json.data.url, name: file.name, size: file.size };
-    if (type === 'viewonce') data.viewOnce = true;
-    await sendData(data);
-    toast('✅ Sent!');
-  } catch (err) {
-    console.error(err);
-    toast('❌ Upload failed: ' + err.message);
-  }
+  await uploadImageFile(file, type === 'viewonce');
 }
 
 function toBase64(file) {
@@ -579,6 +586,85 @@ function escHtml(s) {
     .replace(/>/g, '&gt;');
 }
 
+// ── TYPING INDICATOR ──
+let typingTimer;
+function onTyping() {
+  if (!CCI || !CU) return;
+  update(ref(db, `users/${CU.uid}`), { typingIn: CCI });
+  clearTimeout(typingTimer);
+  typingTimer = setTimeout(() => {
+    update(ref(db, `users/${CU.uid}`), { typingIn: null });
+  }, 2500);
+}
+
+// ── LAST SEEN FORMAT ──
+function fmtLastSeen(ts) {
+  if (!ts) return 'recently';
+  const diff = Date.now() - ts;
+  if (diff < 60000)    return 'just now';
+  if (diff < 3600000)  return Math.floor(diff / 60000) + ' min ago';
+  const d    = new Date(ts);
+  const now  = new Date();
+  if (d.toDateString() === now.toDateString()) return 'today at ' + fmtTime(ts);
+  const yest = new Date(now); yest.setDate(now.getDate() - 1);
+  if (d.toDateString() === yest.toDateString()) return 'yesterday at ' + fmtTime(ts);
+  return d.toLocaleDateString('en-IN') + ' at ' + fmtTime(ts);
+}
+
+// ── CAMERA ──
+let camStream = null;
+
+window.openCAM = async () => {
+  if (!CCI) { toast('Open a chat first'); return; }
+  el('camm').classList.add('show');
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+    el('camv').srcObject = camStream;
+  } catch (err) {
+    toast('❌ Camera access denied');
+    closeCAM();
+  }
+};
+
+window.closeCAM = () => {
+  el('camm').classList.remove('show');
+  if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+};
+
+window.capturePhoto = () => {
+  const video  = el('camv');
+  const canvas = el('camc');
+  canvas.width  = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext('2d').drawImage(video, 0, 0);
+  closeCAM();
+  canvas.toBlob(async blob => {
+    const file = new File([blob], `photo_${Date.now()}.jpg`, { type: 'image/jpeg' });
+    await uploadImageFile(file, false);
+  }, 'image/jpeg', 0.88);
+};
+
+async function uploadImageFile(file, viewOnce) {
+  if (file.size > 10 * 1024 * 1024) { toast('❌ Max image size: 10 MB'); return; }
+  if (!IMGBB_KEY || IMGBB_KEY === 'YOUR_IMGBB_API_KEY_HERE') { toast('❌ ImgBB API key missing'); return; }
+  toast('⏫ Uploading...');
+  try {
+    const b64  = await toBase64(file);
+    const form = new FormData();
+    form.append('image', b64.split(',')[1]);
+    const res  = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_KEY}`, { method: 'POST', body: form });
+    const json = await res.json();
+    if (!json.success) throw new Error(json.error?.message || 'Upload failed');
+    const data = { type: 'image', url: json.data.url, name: file.name, size: file.size };
+    if (viewOnce) data.viewOnce = true;
+    await sendData(data);
+    toast('✅ Sent!');
+  } catch (err) {
+    console.error(err);
+    toast('❌ Upload failed: ' + err.message);
+  }
+}
+
 function fmtSize(bytes) {
   if (!bytes) return '';
   if (bytes < 1024)        return bytes + ' B';
@@ -598,6 +684,14 @@ function lmPreview(lm) {
 // ── file input listeners ──
 el('fi-media').addEventListener('change', e => handleFilePick(e, 'media'));
 el('fi-vo').addEventListener('change',    e => handleFilePick(e, 'viewonce'));
+
+// ── typing listener ──
+el('msgi').addEventListener('input', onTyping);
+
+// ── ESC to close lightbox ──
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') el('lb')?.classList.add('hidden');
+});
 
 // ── init ──
 applyTheme(localStorage.getItem('iitchat-theme') || 'dark');

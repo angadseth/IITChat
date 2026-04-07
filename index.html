@@ -157,6 +157,7 @@
             <!-- Attach Menu -->
             <div class="amnl hidden" id="amnl">
               <div class="amo" onclick="pickFile('media')"><i class="fa fa-image" style="color:#6c63ff"></i> Photo</div>
+              <div class="amo" onclick="pickFile('camera')"><i class="fa fa-camera" style="color:#43e97b"></i> Camera</div>
               <div class="amo" onclick="pickFile('viewonce')"><i class="fa fa-eye" style="color:#ff6584"></i> View Once Photo</div>
             </div>
 
@@ -232,6 +233,19 @@
 
 <!-- Toast -->
 <div class="toast" id="toast"></div>
+
+<!-- ═══ CAMERA MODAL ═══ -->
+<div class="ovl" id="camm">
+  <div class="modal" style="max-width:460px">
+    <h3>📷 Take Photo</h3>
+    <video id="camv" autoplay playsinline style="width:100%;border-radius:12px;background:#000;margin-bottom:12px;max-height:300px;object-fit:cover"></video>
+    <canvas id="camc" hidden></canvas>
+    <div class="mact">
+      <button class="btns" onclick="closeCAM()">Cancel</button>
+      <button class="btnp" style="flex:1" onclick="capturePhoto()"><i class="fa fa-camera"></i> Capture & Send</button>
+    </div>
+  </div>
+</div>
 
 <!-- Hidden file inputs -->
 <input type="file" id="fi-media" accept="image/*" hidden>

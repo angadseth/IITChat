@@ -616,20 +616,27 @@ window.toggleLRP = () => {
 };
 
 window.sendLiveReact = async emoji => {
-  el('lrp').classList.add('hidden');
-  showReactionAnim(emoji);   // show locally immediately
+  // panel band NAHI hoga — multiple reactions bhej sakte ho
+  showReactionAnim(emoji);
   const r = await push(ref(db, `liveReactions/${CCI}`), { emoji, uid: CU.uid, ts: Date.now() });
   setTimeout(() => remove(r), 3500);
 };
 
 function showReactionAnim(emoji) {
+  const count = 3 + Math.floor(Math.random() * 2); // 3 ya 4 emojis
+  for (let i = 0; i < count; i++) {
+    setTimeout(() => spawnOneEmoji(emoji), i * 100);
+  }
+}
+
+function spawnOneEmoji(emoji) {
   const canvas = el('rcanvas');
   if (!canvas) return;
   const div = document.createElement('div');
   div.className   = 'lr-float';
   div.textContent = emoji;
-  div.style.left  = (5 + Math.random() * 65) + '%';
-  div.style.setProperty('--rot', (Math.random() * 30 - 15) + 'deg');
+  div.style.left  = (5 + Math.random() * 68) + '%';
+  div.style.setProperty('--rot', (Math.random() * 40 - 20) + 'deg');
   canvas.appendChild(div);
   setTimeout(() => div.remove(), 3200);
 }

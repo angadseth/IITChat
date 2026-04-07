@@ -116,16 +116,27 @@ onAuthStateChanged(auth, async u => {
     const uRef = ref(db, `users/${u.uid}`);
     await update(uRef, { online: true, lastSeen: Date.now() });
 
-    // Firebase onDisconnect — tab band, network cut, kuch bhi ho — auto offline
-    await onDisconnect(uRef).update({ online: false, lastSeen: serverTimestamp() });
+    // Helper — go online + re-register onDisconnect
+    async function goOnline() {
+      await update(uRef, { online: true, lastSeen: Date.now() });
+      await onDisconnect(uRef).update({ online: false, lastSeen: serverTimestamp() });
+    }
+    async function goOffline() {
+      await update(uRef, { online: false, lastSeen: Date.now() });
+    }
 
-    // Tab hide/show (dusre tab pe switch karna)
+    goOnline();
+
+    // Tab switch / minimize
     document.addEventListener('visibilitychange', () => {
-      if (document.hidden) {
-        update(uRef, { online: false, lastSeen: Date.now() });
-      } else {
-        update(uRef, { online: true, lastSeen: Date.now() });
-      }
+      document.hidden ? goOffline() : goOnline();
+    });
+
+    // Page close / refresh
+    window.addEventListener('beforeunload', () => {
+      navigator.sendBeacon &&
+        navigator.sendBeacon('/null'); // trigger flush
+      goOffline();
     });
 
     const snap = await get(ref(db, `users/${u.uid}`));
@@ -225,6 +236,12 @@ function loadContacts() {
       item.onclick = () => openChat(uid, u);
       cl.appendChild(item);
       setupNotifForContact(uid, u.name, u.avatar || '💬');
+
+      // live online dot update for this contact
+      onValue(ref(db, `users/${uid}/online`), s => {
+        const dot = item.querySelector('.sd');
+        if (dot) { dot.className = 'sd ' + (s.val() ? 'on' : 'off'); }
+      });
     }
   });
 }

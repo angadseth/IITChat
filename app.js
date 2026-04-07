@@ -293,27 +293,39 @@ async function openChat(uid, u) {
   el('chn').textContent  = u.name;
 
   const chs = el('chs');
-  let contactOnline = u.online;
+  let contactOnline = false;
+  let contactLastSeen = null;
+  let isTyping = false;
 
-  const renderStatus = async () => {
+  const renderStatus = () => {
+    if (isTyping) return; // typing indicator already shown
     if (contactOnline) {
       chs.textContent = '● Online';
       chs.className   = 'chs on';
     } else {
-      const lsSnap = await get(ref(db, `users/${uid}/lastSeen`));
-      const ts     = lsSnap.val();
-      chs.textContent = ts ? 'Last seen ' + fmtLastSeen(ts) : 'Offline';
-      chs.className   = 'chs';
+      chs.textContent = contactLastSeen
+        ? 'Last seen ' + fmtLastSeen(contactLastSeen)
+        : 'Offline';
+      chs.className = 'chs';
     }
   };
 
-  renderStatus();
-  onValue(ref(db, `users/${uid}/online`), s => { contactOnline = s.val(); renderStatus(); });
+  // Watch online + lastSeen together — real-time, no stale get()
+  onValue(ref(db, `users/${uid}/online`), s => {
+    contactOnline = !!s.val();
+    renderStatus();
+  });
+  onValue(ref(db, `users/${uid}/lastSeen`), s => {
+    contactLastSeen = s.val();
+    renderStatus();
+  });
   onValue(ref(db, `users/${uid}/typingIn`), s => {
     if (s.val() === CCI) {
+      isTyping = true;
       chs.textContent = 'typing...';
       chs.className   = 'chs typing';
     } else {
+      isTyping = false;
       renderStatus();
     }
   });

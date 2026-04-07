@@ -605,7 +605,7 @@ function escHtml(s) {
 // ═══════════════════════════════════════
 //  LIVE REACTIONS (Google Meet style)
 // ═══════════════════════════════════════
-const LIVE_REACTS = ['❤️','😂','😍','😮','😢','👍','🔥','🎉','🤗','💋'];
+const LIVE_REACTS = ['🫂','🥰','😘','😁','😭','😂','🤣','🌚','😱','🥺','🥲','💋','😛'];
 
 window.toggleLRP = () => {
   const lrp = el('lrp');
@@ -659,36 +659,75 @@ async function initNotifications() {
   }
 }
 
+// WhatsApp-style ding using Web Audio API — no file needed
+function playNotifSound() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(880, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(660, ctx.currentTime + 0.08);
+    gain.gain.setValueAtTime(0.5, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.4);
+
+    // second small ding
+    const osc2 = ctx.createOscillator();
+    const gain2 = ctx.createGain();
+    osc2.connect(gain2);
+    gain2.connect(ctx.destination);
+    osc2.type = 'sine';
+    osc2.frequency.setValueAtTime(1100, ctx.currentTime + 0.12);
+    osc2.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.22);
+    gain2.gain.setValueAtTime(0.3, ctx.currentTime + 0.12);
+    gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.55);
+    osc2.start(ctx.currentTime + 0.12);
+    osc2.stop(ctx.currentTime + 0.55);
+  } catch (_) {}
+}
+
 function setupNotifForContact(uid, uName, uAvatar) {
-  const chatId   = cid(CU.uid, uid);
-  let lastSeenTs = Date.now();  // ignore old messages on init
+  const chatId  = cid(CU.uid, uid);
+  const initTs  = Date.now();
+  let   ready   = false;
 
-  const unsub = onValue(ref(db, `chats/${chatId}/messages`), snap => {
-    if (!snap.exists()) return;
-    const msgs = Object.values(snap.val()).sort((a, b) => a.ts - b.ts);
-    const latest = msgs[msgs.length - 1];
-    if (!latest || latest.sender === CU.uid) return;
-    if (latest.ts <= lastSeenTs) return;
-    lastSeenTs = latest.ts;
+  // onChildAdded fires once per message — perfect for new message detection
+  const unsub = onChildAdded(ref(db, `chats/${chatId}/messages`), snap => {
+    const msg = snap.val();
+    if (!msg) return;
 
-    // tab active hai aur ye hi chat open hai — no notification
+    // skip old messages loaded on init
+    if (!ready) {
+      if (msg.ts < initTs - 2000) return;  // old message, skip
+      // first message after init time — mark ready after a short window
+      setTimeout(() => { ready = true; }, 1500);
+      return;
+    }
+
+    if (msg.sender === CU.uid) return;  // apna message
+
+    // sound har case mein — tab active ho ya hidden
+    playNotifSound();
+
+    // notification sirf tab hidden ho ya dusra chat open ho
     if (!document.hidden && CCI === chatId) return;
 
     if (Notification.permission !== 'granted') return;
 
-    const body = latest.type === 'text'
-      ? latest.text.substring(0, 80)
-      : latest.type === 'image' ? '📷 Photo'
-      : latest.type === 'video' ? '🎥 Video'
-      : '📎 File';
+    const body = msg.type === 'text'  ? msg.text.substring(0, 80)
+               : msg.type === 'image' ? '📷 Photo'
+               : msg.type === 'video' ? '🎥 Video'
+               : '📎 File';
 
     const n = new Notification(`${uAvatar} ${uName}`, {
       body,
       icon: 'https://cdn.jsdelivr.net/npm/twemoji@14/assets/72x72/1f4ac.png',
-      badge: 'https://cdn.jsdelivr.net/npm/twemoji@14/assets/72x72/1f4ac.png',
       tag: chatId,
       renotify: true,
-      vibrate: [120, 60, 120]
     });
     n.onclick = () => { window.focus(); n.close(); };
   });

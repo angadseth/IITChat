@@ -1389,14 +1389,18 @@ function onYTReady(e) {
   if (!mpPendingSeek) return;
   const { seekOffset, seekStartedAt, shouldPlay } = mpPendingSeek;
   mpPendingSeek = null;
-  // Calculate exact position at this moment
   const elapsed = seekStartedAt ? (Date.now() - seekStartedAt) / 1000 : 0;
   const ct = seekOffset + (shouldPlay ? elapsed : 0);
   mpSyncing = true;
   e.target.seekTo(ct, true);
-  if (shouldPlay) e.target.playVideo();
-  else e.target.pauseVideo();
-  setTimeout(() => { mpSyncing = false; }, 800);
+  setTimeout(() => {
+    try {
+      if (shouldPlay) e.target.playVideo();
+      else e.target.pauseVideo();
+    } catch (_) {}
+    // Keep mpSyncing true until the resulting onYTState event is absorbed
+    setTimeout(() => { mpSyncing = false; }, 700);
+  }, 300);
 }
 
 function onYTState(e) {
@@ -1441,43 +1445,43 @@ function renderNowPlaying(m) {
   if (!mpOpen) window.toggleMusic();
 }
 
-// ── Seek-drift polling: detect when THIS user scrubs and push to Firebase ──
+// ── Seek-drift polling: detect local scrubs and push to Firebase ──
 function startSeekPoll() {
   if (mpSyncInterval) clearInterval(mpSyncInterval);
   mpSyncInterval = setInterval(() => {
     if (!ytPlayer || !CCI || mpSyncing || !mpLastFB) return;
     if (typeof ytPlayer.getPlayerState !== 'function') return;
-    if (ytPlayer.getPlayerState() !== YT.PlayerState.PLAYING) return;
+    const state = ytPlayer.getPlayerState();
+    // Only check when playing — paused drift handled by onYTState
+    if (state !== YT.PlayerState.PLAYING) return;
 
-    const ct       = ytPlayer.getCurrentTime();
-    const elapsed  = (Date.now() - mpLastFB.seekedAt) / 1000;
-    const expected = (mpLastFB.seekedTo || 0) + elapsed;
+    const ct      = ytPlayer.getCurrentTime();
+    const elapsed = (Date.now() - mpLastFB.seekedAt) / 1000;
+    const expected = (mpLastFB.seekedTo || 0) + (mpLastFB.playing ? elapsed : 0);
 
-    if (Math.abs(ct - expected) > 3) {
-      // User scrubbed — push new position so the other user follows
+    if (Math.abs(ct - expected) > 2) {
+      // Position drifted — user scrubbed. Push to Firebase.
       const now = Date.now();
-      mpLastFB = { ...mpLastFB, seekedTo: ct, seekedAt: now, by: CU.uid };
+      mpLastFB = { ...mpLastFB, seekedTo: ct, seekedAt: now, playing: true, by: CU.uid };
       mpLastSeekedAt = now;
       update(ref(db, musicPath()), { seekedTo: ct, seekedAt: now, playing: true, by: CU.uid });
     }
-  }, 1200);
+  }, 600);
 }
 
 function applyRemoteSeek(m) {
-  // Recalculate exact position at this instant
   const elapsed = m.playing ? (Date.now() - m.seekedAt) / 1000 : 0;
   const ct = (m.seekedTo || 0) + elapsed;
   mpSyncing = true;
-  try {
-    ytPlayer?.seekTo?.(ct, true);
-    setTimeout(() => {
-      try {
-        if (m.playing) ytPlayer?.playVideo?.();
-        else ytPlayer?.pauseVideo?.();
-      } catch (_) {}
-      mpSyncing = false;
-    }, 400);
-  } catch (_) { mpSyncing = false; }
+  try { ytPlayer?.seekTo?.(ct, true); } catch (_) {}
+  setTimeout(() => {
+    try {
+      if (m.playing) ytPlayer?.playVideo?.();
+      else ytPlayer?.pauseVideo?.();
+    } catch (_) {}
+    // Delay clearing mpSyncing until AFTER the resulting onYTState fires and is absorbed
+    setTimeout(() => { mpSyncing = false; }, 700);
+  }, 250);
 }
 
 function startMusicSync(chatId) {

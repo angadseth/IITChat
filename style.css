@@ -726,3 +726,14 @@ body {
   .sidebar.hidden-mob { transform: translateX(-100%); }
   .ca { position: absolute; inset: 0; }
 }
+
+
+/* ── FOOTER ── */
+.site-footer {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  text-align: center; padding: 7px 0;
+  font-size: 11px; color: var(--text3);
+  background: var(--bg); border-top: 1px solid var(--border);
+  z-index: 50; letter-spacing: 0.02em;
+}
+.site-footer strong { color: var(--text2); font-weight: 500; }

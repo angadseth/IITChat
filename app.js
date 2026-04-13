@@ -1346,9 +1346,11 @@ function escAttr(s) { return (s || '').replace(/'/g, "&#39;").replace(/"/g, "&qu
 window.mpPlay = async function (videoId, title, thumb) {
   if (!CCI) { toast('Open a chat first'); return; }
   const thumbnail = thumb || `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
+  const now = Date.now();
+  mpLastSeekedAt = now;
   await set(ref(db, musicPath()), {
     videoId, title, thumbnail,
-    playing: true, seekedTo: 0, seekedAt: Date.now(), by: CU.uid
+    playing: true, seekedTo: 0, seekedAt: now, by: CU.uid
   });
   if (!mpOpen) window.toggleMusic();
   toast('🎵 Playing for both!');
@@ -1398,19 +1400,20 @@ function onYTReady(e) {
 }
 
 function onYTState(e) {
+  // Only blocked when we're mid-applying a remote seek (to stop echo)
   if (mpSyncing || !CCI) return;
   const path = musicPath();
   const now  = Date.now();
   if (e.data === YT.PlayerState.PLAYING) {
     const ct = ytPlayer.getCurrentTime() || 0;
-    mpLastFB = { ...(mpLastFB || {}), playing: true,  seekedTo: ct, seekedAt: now };
+    mpLastFB = { ...(mpLastFB || {}), playing: true,  seekedTo: ct, seekedAt: now, by: CU.uid };
     mpLastSeekedAt = now;
-    update(ref(db, path), { playing: true,  seekedTo: ct, seekedAt: now });
+    update(ref(db, path), { playing: true,  seekedTo: ct, seekedAt: now, by: CU.uid });
   } else if (e.data === YT.PlayerState.PAUSED) {
     const ct = ytPlayer.getCurrentTime() || 0;
-    mpLastFB = { ...(mpLastFB || {}), playing: false, seekedTo: ct, seekedAt: now };
+    mpLastFB = { ...(mpLastFB || {}), playing: false, seekedTo: ct, seekedAt: now, by: CU.uid };
     mpLastSeekedAt = now;
-    update(ref(db, path), { playing: false, seekedTo: ct, seekedAt: now });
+    update(ref(db, path), { playing: false, seekedTo: ct, seekedAt: now, by: CU.uid });
   }
 }
 
@@ -1432,12 +1435,9 @@ window.mpStop = async function () {
 function renderNowPlaying(m) {
   el('mp-now-title').textContent = m.title || 'Now Playing';
   const thumb = m.thumbnail || `https://img.youtube.com/vi/${m.videoId}/mqdefault.jpg`;
-  const ytUrl = `https://www.youtube.com/watch?v=${m.videoId}`;
   el('mp-np-thumb').src = thumb;
   el('mp-np-thumb').onerror = () => { el('mp-np-thumb').src = `https://img.youtube.com/vi/${m.videoId}/mqdefault.jpg`; };
-  el('mp-np-ytlink').href = ytUrl;
   el('mp-player-wrap').classList.remove('hidden');
-  // open music panel automatically for receiver
   if (!mpOpen) window.toggleMusic();
 }
 
@@ -1455,12 +1455,10 @@ function startSeekPoll() {
 
     if (Math.abs(ct - expected) > 3) {
       // User scrubbed — push new position so the other user follows
-      mpSyncing = true;
       const now = Date.now();
-      mpLastFB = { ...mpLastFB, seekedTo: ct, seekedAt: now };
+      mpLastFB = { ...mpLastFB, seekedTo: ct, seekedAt: now, by: CU.uid };
       mpLastSeekedAt = now;
-      update(ref(db, musicPath()), { seekedTo: ct, seekedAt: now, playing: true });
-      setTimeout(() => { mpSyncing = false; }, 700);
+      update(ref(db, musicPath()), { seekedTo: ct, seekedAt: now, playing: true, by: CU.uid });
     }
   }, 1200);
 }
@@ -1504,29 +1502,26 @@ function startMusicSync(chatId) {
     mpLastFB = m;
     renderNowPlaying(m);
 
+    const fromMe = m.by === CU?.uid;
+
     if (m.videoId !== lastVid) {
-      // ── New song ──
+      // ── New song (always load regardless of who started it) ──
       lastVid = m.videoId;
       mpLastSeekedAt = m.seekedAt;
       mpSyncing = true;
       mpLoadPlayer(m.videoId, m.seekedTo || 0, m.seekedAt, m.playing);
-      // mpSyncing cleared in onYTReady; start drift poll after player ready
-      setTimeout(startSeekPoll, 2000);
+      setTimeout(startSeekPoll, 2500);
 
-    } else if (m.seekedAt !== mpLastSeekedAt) {
-      // ── Same song, but someone scrubbed ──
+    } else if (!fromMe && m.seekedAt !== mpLastSeekedAt) {
+      // ── Other person scrubbed or changed play state ──
       mpLastSeekedAt = m.seekedAt;
       applyRemoteSeek(m);
 
-    } else if (!mpSyncing) {
-      // ── Same song, same seek position — just mirror play/pause ──
-      mpSyncing = true;
-      try {
-        if (m.playing) ytPlayer?.playVideo?.();
-        else ytPlayer?.pauseVideo?.();
-      } catch (_) {}
-      setTimeout(() => { mpSyncing = false; }, 500);
+    } else if (fromMe) {
+      // ── Our own echo — just keep mpLastFB fresh, do nothing ──
+      mpLastSeekedAt = m.seekedAt;
     }
+    // (no else needed — play/pause is handled inside applyRemoteSeek + onYTState)
   });
 }
 

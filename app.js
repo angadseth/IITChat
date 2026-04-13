@@ -1559,7 +1559,11 @@ window.toggleDraw = function () {
   el('draw-panel').classList.toggle('hidden', !drawOpen);
   if (drawOpen) {
     if (!drawInited) initDraw();
-    if (CCI) startDrawSync();
+    // Wait one frame so the panel is rendered and has real dimensions
+    requestAnimationFrame(() => {
+      sizeDraw();
+      if (CCI) startDrawSync();
+    });
   }
 };
 
@@ -1569,9 +1573,28 @@ function initDraw() {
   drawCtx     = drawCanvas.getContext('2d');
   drawLiveCtx = drawLiveCv.getContext('2d');
   drawInited  = true;
-  sizeDraw();
 
-  const on = (el_, ev, fn, opts) => el_.addEventListener(ev, fn, opts);
+  // ── drag the panel by its header ──
+  const panel = el('draw-panel');
+  const hdr   = panel.querySelector('.draw-hdr');
+  let drag = null;
+  hdr.addEventListener('mousedown', e => {
+    if (e.target.tagName === 'BUTTON') return;
+    const r = panel.getBoundingClientRect();
+    drag = { ox: e.clientX - r.left, oy: e.clientY - r.top };
+    panel.style.transition = 'none';
+  });
+  document.addEventListener('mousemove', e => {
+    if (!drag) return;
+    panel.style.left = Math.max(0, e.clientX - drag.ox) + 'px';
+    panel.style.top  = Math.max(0, e.clientY - drag.oy) + 'px';
+  });
+  document.addEventListener('mouseup', () => { drag = null; });
+
+  // Re-size canvas when panel is resized
+  new ResizeObserver(() => { if (drawOpen) sizeDraw(true); }).observe(panel);
+
+  const on = (t, ev, fn, o) => t.addEventListener(ev, fn, o);
   on(drawCanvas, 'mousedown',  e => onDS(ptOf(e)));
   on(drawCanvas, 'mousemove',  e => { if (drawIsDrawing) onDM(ptOf(e)); });
   on(drawCanvas, 'mouseup',    onDE);
@@ -1581,11 +1604,15 @@ function initDraw() {
   on(drawCanvas, 'touchend',   e => { e.preventDefault(); onDE(); }, {passive:false});
 }
 
-function sizeDraw() {
+function sizeDraw(redraw) {
   if (!drawCanvas) return;
-  const w = el('draw-wrap').clientWidth || 320;
-  const h = Math.round(w * 0.72);
+  const wrap = el('draw-wrap');
+  const w = wrap.clientWidth;
+  const h = wrap.clientHeight;
+  if (!w || !h) return;
   [drawCanvas, drawLiveCv].forEach(c => { c.width = w; c.height = h; });
+  // After resize, re-render all existing strokes
+  if (redraw && CCI) startDrawSync();
 }
 
 function ptOf(e) {

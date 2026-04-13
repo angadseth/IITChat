@@ -865,25 +865,29 @@ body {
   vertical-align: middle; margin-right: 6px;
 }
 
-/* ── LIVE DRAW PANEL ── */
+/* ── LIVE DRAW PANEL (floating draggable window) ── */
 .draw-panel {
-  position: absolute;
-  top: 54px; left: 50%; transform: translateX(-50%);
-  width: min(380px, calc(100% - 16px));
+  position: fixed;
+  top: 80px; left: calc(50% - 260px);
+  width: 520px;
   background: var(--bg2);
   border: 1px solid var(--border);
   border-radius: 16px;
-  box-shadow: var(--shadow);
-  z-index: 121;
+  box-shadow: 0 12px 48px rgba(0,0,0,0.55);
+  z-index: 300;
   display: flex; flex-direction: column;
   overflow: hidden;
+  resize: both;
+  min-width: 300px; min-height: 320px;
 }
 .draw-hdr {
   display: flex; align-items: center; justify-content: space-between;
   padding: 10px 12px 8px;
   font-size: 13px; font-weight: 600; color: var(--text);
   border-bottom: 1px solid var(--border); flex-shrink: 0;
+  cursor: grab; user-select: none;
 }
+.draw-hdr:active { cursor: grabbing; }
 .draw-hdr-right { display: flex; align-items: center; gap: 6px; }
 .draw-clear-btn {
   background: var(--bg3); border: 1px solid var(--border);
@@ -900,16 +904,13 @@ body {
 
 /* Toolbar */
 .draw-toolbar { padding: 8px 10px 6px; flex-shrink: 0; }
-.draw-colors {
-  display: flex; gap: 6px; margin-bottom: 7px; flex-wrap: wrap;
-}
+.draw-colors { display: flex; gap: 6px; margin-bottom: 7px; flex-wrap: wrap; }
 .dco {
-  width: 22px; height: 22px; border-radius: 50%; cursor: pointer;
+  width: 24px; height: 24px; border-radius: 50%; cursor: pointer;
   border: 2px solid transparent; transition: var(--tr); flex-shrink: 0;
 }
-.dco.act { border-color: #fff; transform: scale(1.2); }
-.dco:hover { transform: scale(1.15); }
-
+.dco.act { border-color: #fff; box-shadow: 0 0 0 2px var(--accent); transform: scale(1.15); }
+.dco:hover { transform: scale(1.1); }
 .draw-row2 { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .draw-sizes { display: flex; gap: 4px; align-items: center; }
 .draw-shapes { display: flex; gap: 4px; }
@@ -917,25 +918,24 @@ body {
   background: var(--bg3); border: 1px solid var(--border);
   border-radius: 7px; cursor: pointer; color: var(--text2);
   transition: var(--tr); font-size: 13px; font-family: inherit;
-  padding: 4px 8px; line-height: 1;
+  padding: 4px 9px; line-height: 1;
 }
-.dsb { min-width: 28px; text-align: center; }
-.dsb[data-s="3"]  { font-size: 10px; font-weight: 900; }
+.dsb { min-width: 32px; text-align: center; }
+.dsb[data-s="3"]  { font-size: 9px;  font-weight: 900; letter-spacing: 1px; }
 .dsb[data-s="7"]  { font-size: 14px; font-weight: 900; }
-.dsb[data-s="16"] { font-size: 18px; font-weight: 900; }
+.dsb[data-s="16"] { font-size: 20px; font-weight: 900; }
 .dsb:hover, .dshp:hover { background: var(--bg); color: var(--text); }
 .dsb.act, .dshp.act { background: var(--accent); color: #fff; border-color: var(--accent); }
 .erase-btn.act { background: var(--red); border-color: var(--red); color: #fff; }
 
 /* Canvas area */
 .draw-wrap {
-  position: relative; flex: 1; background: #111118;
+  position: relative; flex: 1; min-height: 200px;
+  background: #0e0e1a;
   border-top: 1px solid var(--border); cursor: crosshair;
+  overflow: hidden;
 }
-#draw-canvas {
-  display: block; position: absolute; top: 0; left: 0;
+#draw-canvas, .draw-live-layer {
+  display: block; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
 }
-.draw-live-layer {
-  display: block; position: absolute; top: 0; left: 0;
-  pointer-events: none;
-}
+.draw-live-layer { pointer-events: none; }

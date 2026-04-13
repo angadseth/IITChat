@@ -54,9 +54,27 @@ let contacts = {};
 let unsub       = null;   // unsubscribe listener
 let unsubLR     = null;   // live reactions listener
 let replyTo     = null;   // { id, text, senderName }
-let isGroup     = false;  // current chat is a group?
-let grpData     = null;   // current group object
-let memberCache = {};     // uid → {name,avatar} for group messages
+let isGroup       = false;  // current chat is a group?
+let grpData       = null;   // current group object
+let memberCache   = {};     // uid → {name,avatar} for group messages
+let unreadCounts  = JSON.parse(localStorage.getItem('iitchat-unread') || '{}');
+let ctListeners   = [];     // contact-level listeners to clean up on reload
+
+function saveUnread() { localStorage.setItem('iitchat-unread', JSON.stringify(unreadCounts)); }
+
+function updateBadge(item, count) {
+  let badge = item.querySelector('.ubadge');
+  if (count > 0) {
+    if (!badge) {
+      badge = document.createElement('div');
+      badge.className = 'ubadge';
+      item.querySelector('.cim').prepend(badge);
+    }
+    badge.textContent = count > 99 ? '99+' : count;
+  } else {
+    badge?.remove();
+  }
+}
 
 // ═══════════════════════════════════════
 //  AUTH
@@ -194,8 +212,8 @@ async function autoClean() {
 function loadContacts() {
   onValue(ref(db, `contacts/${CU.uid}`), async snap => {
     contacts = {};
-    notifUnsubs.forEach(u => u());
-    notifUnsubs = [];
+    notifUnsubs.forEach(u => u()); notifUnsubs = [];
+    ctListeners.forEach(u => u());  ctListeners = [];
     const cl   = el('cl');
     cl.innerHTML = '';
     const data = snap.val() || {};
@@ -237,15 +255,39 @@ function loadContacts() {
         <div class="cim">
           <div class="cit">${lm ? fmtTime(lm.ts) : ''}</div>
         </div>`;
+      // show existing unread badge from localStorage
+      updateBadge(item, unreadCounts[uid] || 0);
+
       item.onclick = () => openChat(uid, u);
       cl.appendChild(item);
       setupNotifForContact(uid, u.name, u.avatar || '💬');
 
-      // live online dot update for this contact
-      onValue(ref(db, `users/${uid}/online`), s => {
+      // ── live online dot ──
+      ctListeners.push(onValue(ref(db, `users/${uid}/online`), s => {
         const dot = item.querySelector('.sd');
-        if (dot) { dot.className = 'sd ' + (s.val() ? 'on' : 'off'); }
-      });
+        if (dot) dot.className = 'sd ' + (s.val() ? 'on' : 'off');
+      }));
+
+      // ── live last message update in sidebar ──
+      ctListeners.push(onValue(ref(db, `chats/${chatId}/lastMessage`), snap => {
+        const lm  = snap.val();
+        const pip = item.querySelector('.cip');
+        const cit = item.querySelector('.cit');
+        if (pip) pip.textContent = lmPreview(lm);
+        if (cit) cit.textContent = lm ? fmtTime(lm.ts) : '';
+      }));
+
+      // ── unread count: only NEW messages (ts > now) ──
+      const listenSince = Date.now();
+      ctListeners.push(onChildAdded(ref(db, `chats/${chatId}/messages`), snap => {
+        const msg = snap.val();
+        if (!msg || msg.ts <= listenSince) return;  // skip old
+        if (msg.sender === CU.uid) return;           // my own msg
+        if (CCI === chatId) return;                  // chat is open
+        unreadCounts[uid] = (unreadCounts[uid] || 0) + 1;
+        updateBadge(item, unreadCounts[uid]);
+        saveUnread();
+      }));
     }
   });
 }
@@ -283,7 +325,16 @@ function cid(a, b) { return [a, b].sort().join('_'); }
 
 async function openChat(uid, u) {
   isGroup = false; grpData = null; memberCache = {};
-  el('gib').style.display = 'none';   // hide group info button
+  el('gib').style.display = 'none';
+
+  // clear unread for this contact
+  if (unreadCounts[uid]) {
+    unreadCounts[uid] = 0;
+    saveUnread();
+    const item = document.querySelector(`.ci[data-uid="${uid}"]`);
+    if (item) updateBadge(item, 0);
+  }
+
   CCT = u;
   CCI = cid(CU.uid, uid);
 

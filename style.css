@@ -466,7 +466,20 @@ body {
 .rpk span:hover { transform: scale(1.3); }
 
 /* ── INPUT AREA ── */
-.ia { padding: 14px 18px; border-top: 1px solid var(--border); background: var(--bg2); }
+.ia { padding: 14px 18px; border-top: 1px solid var(--border); background: var(--bg2); flex-shrink: 0; }
+
+/* ── Scroll-to-bottom button ── */
+.scroll-btn {
+  position: absolute; bottom: 14px; right: 14px;
+  width: 38px; height: 38px; border-radius: 50%;
+  background: var(--accent); border: none; color: #fff;
+  cursor: pointer; z-index: 15;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 3px 14px rgba(0,0,0,0.4);
+  font-size: 15px; transition: var(--tr);
+  animation: badgePop 0.2s ease;
+}
+.scroll-btn:hover { opacity: 0.85; transform: scale(1.08); }
 .ir { display: flex; align-items: flex-end; gap: 8px; position: relative; }
 
 .iw {

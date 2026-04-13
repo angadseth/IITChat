@@ -440,8 +440,26 @@ function loadMsgs() {
       prevSender = msg.sender;
     });
     area.scrollTop = area.scrollHeight;
+    checkScrollBtn();
   });
 }
+
+// ── Scroll-to-bottom button ──
+function checkScrollBtn() {
+  const area = el('ma');
+  const btn  = el('scroll-btn');
+  if (!area || !btn) return;
+  const distFromBottom = area.scrollHeight - area.scrollTop - area.clientHeight;
+  btn.classList.toggle('hidden', distFromBottom < 80);
+}
+
+window.scrollToBottom = function () {
+  const area = el('ma');
+  area.scrollTo({ top: area.scrollHeight, behavior: 'smooth' });
+};
+
+// Attach scroll listener once
+el('ma').addEventListener('scroll', checkScrollBtn);
 
 function mkBody(msg, isMe) {
   if (msg.type === 'text') return escHtml(msg.text).replace(/\n/g, '<br>');

@@ -60,6 +60,13 @@ let memberCache   = {};     // uid → {name,avatar} for group messages
 let unreadCounts  = JSON.parse(localStorage.getItem('iitchat-unread') || '{}');
 let ctListeners   = [];     // contact-level listeners to clean up on reload
 
+// ── music state ──
+let ytPlayer      = null;   // YouTube IFrame player
+let ytReady       = false;  // IFrame API loaded?
+let musicUnsub    = null;   // Firebase music listener
+let mpSyncing     = false;  // prevent feedback loop when syncing from Firebase
+let mpOpen        = false;  // panel open?
+
 function saveUnread() { localStorage.setItem('iitchat-unread', JSON.stringify(unreadCounts)); }
 
 function updateBadge(item, count) {
@@ -398,6 +405,7 @@ async function openChat(uid, u) {
     setTimeout(() => remove(snap.ref), 3200);
   });
 
+  startMusicSync(CCI);
   loadMsgs();
 }
 
@@ -862,6 +870,7 @@ async function openGroupChat(gid, g) {
     }
   });
 
+  startMusicSync(gid);
   loadMsgs();
 }
 
@@ -1190,6 +1199,158 @@ function lmPreview(lm) {
   if (lm.type === 'video')    return '🎥 Video';
   if (lm.type === 'document') return '📄 ' + (lm.name || 'Document');
   return '📎';
+}
+
+// ═══════════════════════════════════════
+//  🎵 SHARED MUSIC
+// ═══════════════════════════════════════
+
+// Load YouTube IFrame API once
+(function loadYTApi() {
+  const s = document.createElement('script');
+  s.src = 'https://www.youtube.com/iframe_api';
+  document.head.appendChild(s);
+})();
+window.onYouTubeIframeAPIReady = function () { ytReady = true; };
+
+function musicPath() {
+  if (!CCI) return null;
+  return isGroup ? `groups/${CCI}/music` : `chats/${CCI}/music`;
+}
+
+window.toggleMusic = function () {
+  const panel = el('music-panel');
+  mpOpen = !mpOpen;
+  panel.classList.toggle('hidden', !mpOpen);
+  if (mpOpen) el('mp-search-inp').focus();
+};
+
+window.mpSearch = async function () {
+  const q = el('mp-search-inp').value.trim();
+  if (!q) return;
+  const res = el('mp-results');
+  res.innerHTML = '<div class="mp-loading">Searching…</div>';
+  try {
+    const PIPED_INSTANCES = [
+      'https://pipedapi.kavin.rocks',
+      'https://api.piped.projectsegfau.lt',
+      'https://piped-api.garudalinux.org'
+    ];
+    let data = null;
+    for (const base of PIPED_INSTANCES) {
+      try {
+        const r = await fetch(`${base}/search?q=${encodeURIComponent(q)}&filter=music_songs`);
+        if (r.ok) { data = await r.json(); break; }
+      } catch (_) {}
+    }
+    if (!data) throw new Error('All instances failed');
+    const items = (data.items || []).filter(i => i.url && i.url.includes('watch'));
+    if (!items.length) { res.innerHTML = '<div class="mp-loading">No results</div>'; return; }
+    res.innerHTML = items.slice(0, 8).map(item => {
+      const vid = item.url.split('v=')[1]?.split('&')[0];
+      if (!vid) return '';
+      const dur = item.duration > 0 ? fmtDur(item.duration) : '';
+      return `<div class="mp-result" onclick="mpPlay('${vid}','${escAttr(item.title)}')">
+        <img class="mp-thumb" src="${item.thumbnail || ''}" onerror="this.style.display='none'">
+        <div class="mp-rmeta">
+          <div class="mp-rtitle">${item.title}</div>
+          <div class="mp-rsub">${item.uploaderName || ''} ${dur ? '· '+dur : ''}</div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch (err) {
+    res.innerHTML = '<div class="mp-loading">Search failed. Try again.</div>';
+  }
+};
+
+function fmtDur(s) {
+  const m = Math.floor(s / 60), sec = s % 60;
+  return `${m}:${String(sec).padStart(2,'0')}`;
+}
+function escAttr(s) { return (s||'').replace(/'/g,"&#39;").replace(/"/g,"&quot;"); }
+
+window.mpPlay = async function (videoId, title) {
+  if (!CCI) { toast('Open a chat first'); return; }
+  const path = musicPath();
+  await set(ref(db, path), {
+    videoId,
+    title,
+    playing: true,
+    seekedTo: 0,
+    seekedAt: Date.now(),
+    by: CU.uid
+  });
+  toast('🎵 Playing for both!');
+};
+
+function mpLoadPlayer(videoId, seekTo) {
+  el('mp-player-wrap').classList.remove('hidden');
+  if (ytPlayer && typeof ytPlayer.loadVideoById === 'function') {
+    ytPlayer.loadVideoById({ videoId, startSeconds: seekTo });
+  } else if (ytReady) {
+    ytPlayer = new YT.Player('yt-player', {
+      height: '0', width: '0',   // hidden — audio only feel; we show title + controls
+      videoId,
+      playerVars: { autoplay: 1, controls: 0, start: Math.floor(seekTo), modestbranding: 1, rel: 0 },
+      events: { onReady: e => e.target.playVideo(), onStateChange: onYTState }
+    });
+  } else {
+    setTimeout(() => mpLoadPlayer(videoId, seekTo), 300);
+  }
+}
+
+function onYTState(e) {
+  if (mpSyncing || !CCI) return;
+  const path = musicPath();
+  if (e.data === YT.PlayerState.PLAYING) {
+    const ct = ytPlayer.getCurrentTime() || 0;
+    update(ref(db, path), { playing: true, seekedTo: ct, seekedAt: Date.now() });
+  } else if (e.data === YT.PlayerState.PAUSED) {
+    const ct = ytPlayer.getCurrentTime() || 0;
+    update(ref(db, path), { playing: false, seekedTo: ct, seekedAt: Date.now() });
+  }
+}
+
+window.mpTogglePlay = function () {
+  if (!ytPlayer) return;
+  const state = ytPlayer.getPlayerState();
+  if (state === YT.PlayerState.PLAYING) ytPlayer.pauseVideo();
+  else ytPlayer.playVideo();
+};
+
+window.mpStop = async function () {
+  if (!CCI) return;
+  await set(ref(db, musicPath()), null);
+  if (ytPlayer) ytPlayer.stopVideo();
+  el('mp-player-wrap').classList.add('hidden');
+  el('mp-now-title').textContent = '';
+};
+
+function startMusicSync(chatId) {
+  if (musicUnsub) { musicUnsub(); musicUnsub = null; }
+  const path = isGroup ? `groups/${chatId}/music` : `chats/${chatId}/music`;
+  musicUnsub = onValue(ref(db, path), snap => {
+    const m = snap.val();
+    if (!m) {
+      el('mp-player-wrap').classList.add('hidden');
+      el('mp-now-title').textContent = '';
+      if (ytPlayer) ytPlayer.stopVideo();
+      return;
+    }
+    el('mp-now-title').textContent = m.title || '';
+    el('mp-player-wrap').classList.remove('hidden');
+    const elapsed = (Date.now() - m.seekedAt) / 1000;
+    const seekTo = (m.seekedTo || 0) + (m.playing ? elapsed : 0);
+    mpSyncing = true;
+    mpLoadPlayer(m.videoId, seekTo);
+    setTimeout(() => {
+      mpSyncing = false;
+      if (ytPlayer && typeof ytPlayer.getPlayerState === 'function') {
+        if (m.playing) ytPlayer.playVideo();
+        else ytPlayer.pauseVideo();
+      }
+    }, 800);
+  });
 }
 
 // ── file input listeners ──

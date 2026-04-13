@@ -162,7 +162,8 @@
             <button class="ib" id="gib" title="Group Info" onclick="openGI()" style="display:none">
               <i class="fa fa-info-circle"></i>
             </button>
-            <button class="ib" id="lrb" title="Live Reaction" onclick="toggleLRP()">❤️</button>
+            <button class="ib" id="mpb" title="Shared Music" onclick="toggleMusic()">🎵</button>
+          <button class="ib" id="lrb" title="Live Reaction" onclick="toggleLRP()">❤️</button>
             <button class="ib" title="Clear Chat" onclick="clearChat()">
               <i class="fa fa-trash"></i>
             </button>
@@ -172,6 +173,32 @@
 
         <!-- Floating reaction canvas -->
         <div id="rcanvas" class="rcanvas"></div>
+
+        <!-- 🎵 Shared Music Panel -->
+        <div class="music-panel hidden" id="music-panel">
+          <div class="mp-header">
+            <span>🎵 Shared Music</span>
+            <button class="mp-x" onclick="toggleMusic()">✕</button>
+          </div>
+          <!-- Now playing bar -->
+          <div class="mp-player-wrap hidden" id="mp-player-wrap">
+            <div id="yt-player"></div>
+            <div class="mp-now">
+              <div class="mp-now-title" id="mp-now-title"></div>
+              <div class="mp-now-ctrls">
+                <button class="mp-ctrl-btn" onclick="mpTogglePlay()" title="Play/Pause">⏯</button>
+                <button class="mp-ctrl-btn" onclick="mpStop()" title="Stop & clear for both">⏹</button>
+              </div>
+            </div>
+          </div>
+          <!-- Search -->
+          <div class="mp-search-row">
+            <input class="mp-search-inp" id="mp-search-inp" placeholder="Search song / artist…"
+              onkeydown="if(event.key==='Enter')mpSearch()">
+            <button class="mp-search-btn" onclick="mpSearch()"><i class="fa fa-search"></i></button>
+          </div>
+          <div class="mp-results" id="mp-results"></div>
+        </div>
 
         <!-- Messages -->
         <div class="ma" id="ma"></div>

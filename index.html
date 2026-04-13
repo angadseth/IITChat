@@ -89,6 +89,9 @@
           <button class="ib" title="Add Friend" onclick="openAC()">
             <i class="fa fa-user-plus"></i>
           </button>
+          <button class="ib" title="New Group" onclick="openCG()">
+            <i class="fa fa-users"></i>
+          </button>
           <button class="ib" title="Settings" onclick="openSP()">
             <i class="fa fa-cog"></i>
           </button>
@@ -107,6 +110,21 @@
         <div class="noct">
           <i class="fa fa-users"></i>
           <p>No friends yet.<br>Add someone to start!</p>
+        </div>
+      </div>
+
+      <!-- Groups Section -->
+      <div class="grp-sec">
+        <div class="grp-hd">
+          <span>Groups</span>
+          <button class="ib" onclick="openCG()" title="New Group" style="width:26px;height:26px;font-size:11px">
+            <i class="fa fa-plus"></i>
+          </button>
+        </div>
+        <div class="cl" id="gcl" style="flex:unset;max-height:260px">
+          <div class="noct" style="padding:18px 10px">
+            <i class="fa fa-users"></i><p>No groups yet</p>
+          </div>
         </div>
       </div>
     </div>
@@ -133,6 +151,9 @@
             <div class="chs" id="chs">offline</div>
           </div>
           <div style="display:flex;gap:6px;position:relative">
+            <button class="ib" id="gib" title="Group Info" onclick="openGI()" style="display:none">
+              <i class="fa fa-info-circle"></i>
+            </button>
             <button class="ib" id="lrb" title="Live Reaction" onclick="toggleLRP()">❤️</button>
             <button class="ib" title="Clear Chat" onclick="clearChat()">
               <i class="fa fa-trash"></i>
@@ -250,6 +271,42 @@
 
 <!-- Toast -->
 <div class="toast" id="toast"></div>
+
+<!-- ═══ CREATE GROUP MODAL ═══ -->
+<div class="ovl" id="cgm">
+  <div class="modal" style="max-width:420px">
+    <h3>👥 New Group</h3>
+    <div class="fg">
+      <label>Group Name</label>
+      <input type="text" id="cgn" placeholder="e.g. Study Group 📚">
+    </div>
+    <div class="fg">
+      <label>Group Avatar</label>
+      <div class="avp" id="cgavp"></div>
+    </div>
+    <div class="fg">
+      <label>Add Members</label>
+      <div id="cgmems" style="margin-top:8px;display:flex;flex-direction:column;gap:6px;max-height:160px;overflow-y:auto"></div>
+    </div>
+    <div class="aerr" id="cgerr"></div>
+    <div class="mact">
+      <button class="btns" onclick="closeCG()">Cancel</button>
+      <button class="btnp" style="flex:1" onclick="confirmCG()"><i class="fa fa-check"></i> Create Group</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ GROUP INFO MODAL ═══ -->
+<div class="ovl" id="gim">
+  <div class="modal" style="max-width:380px">
+    <h3 id="gi-title"></h3>
+    <div id="gi-list" style="max-height:220px;overflow-y:auto;margin-bottom:12px"></div>
+    <div id="gi-add"></div>
+    <div class="mact" style="margin-top:14px">
+      <button class="btns" onclick="closeGI()">Close</button>
+    </div>
+  </div>
+</div>
 
 <!-- ═══ CAMERA MODAL ═══ -->
 <div class="ovl" id="camm">

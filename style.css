@@ -492,6 +492,24 @@ body {
 }
 .toast.show { transform: translateX(-50%) translateY(0); }
 
+/* ── GROUPS SIDEBAR SECTION ── */
+.grp-sec { border-top: 1px solid var(--border); }
+.grp-hd {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px 6px;
+  font-size: 11px; font-weight: 700; color: var(--text2);
+  letter-spacing: .6px; text-transform: uppercase;
+}
+
+/* ── CREATE GROUP / GROUP INFO ── */
+.cg-member {
+  display: flex; align-items: center; gap: 9px;
+  padding: 7px 10px; border-radius: 9px; cursor: pointer;
+  font-size: 13px; transition: var(--tr);
+}
+.cg-member:hover { background: var(--bg3); }
+.cg-member input { accent-color: var(--accent); width: 15px; height: 15px; cursor: pointer; }
+
 /* ── REPLY BAR ── */
 .reply-bar {
   display: flex; align-items: center; justify-content: space-between;

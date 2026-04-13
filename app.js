@@ -51,9 +51,12 @@ let CU       = null;   // current user
 let CCI      = null;   // current chat id
 let CCT      = null;   // current contact object
 let contacts = {};
-let unsub    = null;   // unsubscribe listener
-let unsubLR  = null;   // live reactions listener
-let replyTo  = null;   // { id, text, senderName }
+let unsub       = null;   // unsubscribe listener
+let unsubLR     = null;   // live reactions listener
+let replyTo     = null;   // { id, text, senderName }
+let isGroup     = false;  // current chat is a group?
+let grpData     = null;   // current group object
+let memberCache = {};     // uid → {name,avatar} for group messages
 
 // ═══════════════════════════════════════
 //  AUTH
@@ -155,6 +158,7 @@ onAuthStateChanged(auth, async u => {
 
     applyTheme(localStorage.getItem('iitchat-theme') || 'dark');
     loadContacts();
+    loadGroups();
     autoClean();
     initNotifications();
   } else {
@@ -278,6 +282,8 @@ window.filterCL = () => {
 function cid(a, b) { return [a, b].sort().join('_'); }
 
 async function openChat(uid, u) {
+  isGroup = false; grpData = null; memberCache = {};
+  el('gib').style.display = 'none';   // hide group info button
   CCT = u;
   CCI = cid(CU.uid, uid);
 
@@ -415,10 +421,14 @@ function mkMsg(msg, isMe, con) {
       <div class="rp-qtext">${escHtml(msg.replyTo.text).substring(0, 80)}</div>
     </div>` : '';
 
+  const sender     = isGroup ? (memberCache[msg.sender] || {}) : {};
+  const senderAv   = isGroup ? (sender.avatar || '👤') : (CCT?.avatar || '👤');
+  const senderName = isGroup ? (sender.name   || '') : (CCT?.name || '');
+
   row.innerHTML = `
-    ${!isMe ? `<div class="mav">${CCT?.avatar || '👤'}</div>` : ''}
+    ${!isMe ? `<div class="mav">${senderAv}</div>` : ''}
     <div class="mc">
-      ${!isMe && !con ? `<div class="msn">${CCT?.name || ''}</div>` : ''}
+      ${!isMe && !con ? `<div class="msn">${escHtml(senderName)}</div>` : ''}
       <div class="bw">
         <div class="bub" onclick="showRP(event,this,'${msg.id}',${isMe})">${replyHtml}${body}</div>
       </div>
@@ -691,6 +701,193 @@ function escHtml(s) {
 }
 
 // ═══════════════════════════════════════
+//  GROUPS
+// ═══════════════════════════════════════
+const GRP_AVATARS = ['👥','🎉','📚','🏏','🎮','🎵','💼','🌍','🔥','💪','🎨','🤝'];
+
+function loadGroups() {
+  onValue(ref(db, `userGroups/${CU.uid}`), async snap => {
+    const gcl  = el('gcl');
+    gcl.innerHTML = '';
+    const data = snap.val() || {};
+    const gids = Object.keys(data);
+    if (!gids.length) {
+      gcl.innerHTML = '<div class="noct" style="padding:18px 10px"><i class="fa fa-users"></i><p>No groups yet</p></div>';
+      return;
+    }
+    const results = await Promise.all(gids.map(async gid => {
+      const [gs, lmSnap] = await Promise.all([
+        get(ref(db, `groups/${gid}`)),
+        get(ref(db, `chats/${gid}/lastMessage`))
+      ]);
+      return { gid, gs, lm: lmSnap.val() };
+    }));
+    for (const { gid, gs, lm } of results) {
+      if (!gs.exists()) continue;
+      const g = gs.val();
+      const mc = Object.keys(g.members || {}).length;
+      const item = document.createElement('div');
+      item.className   = 'ci' + (CCI === gid ? ' act' : '');
+      item.dataset.gid = gid;
+      item.innerHTML   = `
+        <div class="ciav" style="font-size:20px;background:var(--bg3)">${g.avatar || '👥'}</div>
+        <div class="cii">
+          <div class="cin">${escHtml(g.name)}</div>
+          <div class="cip">${lm ? lmPreview(lm) : mc + ' members'}</div>
+        </div>
+        <div class="cim"><div class="cit">${lm ? fmtTime(lm.ts) : ''}</div></div>`;
+      item.onclick = () => openGroupChat(gid, g);
+      gcl.appendChild(item);
+    }
+  });
+}
+
+async function openGroupChat(gid, g) {
+  isGroup = true; grpData = g; CCT = null; CCI = gid;
+
+  document.querySelectorAll('.ci').forEach(i => i.classList.remove('act'));
+  document.querySelector(`.ci[data-gid="${gid}"]`)?.classList.add('act');
+
+  el('cwel').classList.add('hidden');
+  const acd = el('acd');
+  acd.classList.remove('hidden'); acd.style.display = 'flex';
+
+  el('chav').textContent      = g.avatar || '👥';
+  el('chn').textContent       = g.name;
+  el('gib').style.display     = 'flex';   // show group info button
+
+  const mUids = Object.keys(g.members || {});
+  el('chs').textContent = mUids.length + ' members';
+  el('chs').className   = 'chs';
+
+  // load member cache in parallel
+  memberCache = {};
+  await Promise.all(mUids.map(async uid => {
+    const s = await get(ref(db, `users/${uid}`));
+    if (s.exists()) memberCache[uid] = s.val();
+  }));
+
+  // live reactions
+  if (unsubLR) unsubLR();
+  unsubLR = onChildAdded(ref(db, `liveReactions/${CCI}`), snap => {
+    const d = snap.val();
+    if (!d || !d.emoji || Date.now() - d.ts > 5000 || d.uid === CU.uid) return;
+    showReactionAnim(d.emoji);
+    setTimeout(() => remove(snap.ref), 3200);
+  });
+
+  // group typing
+  onValue(ref(db, `groups/${gid}/typing`), snap => {
+    const data = snap.val() || {};
+    const now  = Date.now();
+    const typers = Object.entries(data)
+      .filter(([uid, ts]) => uid !== CU.uid && now - ts < 4000)
+      .map(([uid]) => memberCache[uid]?.name || 'Someone');
+    const chs = el('chs');
+    if (typers.length) {
+      chs.textContent = typers[0] + ' is typing...';
+      chs.className   = 'chs typing';
+    } else {
+      chs.textContent = mUids.length + ' members';
+      chs.className   = 'chs';
+    }
+  });
+
+  loadMsgs();
+}
+
+// ── CREATE GROUP ──
+const cgSel = new Set();
+
+window.openCG = () => {
+  cgSel.clear();
+  el('cgn').value = '';
+  el('cgerr').textContent = '';
+
+  // avatar picker
+  el('cgavp').innerHTML = GRP_AVATARS.map((a, i) =>
+    `<div class="avo${i===0?' sel':''}" data-av="${a}" onclick="selAv(this)">${a}</div>`
+  ).join('');
+
+  // member checkboxes from contacts
+  const html = Object.values(contacts).map(c => `
+    <label class="cg-member">
+      <input type="checkbox" value="${c.uid}" onchange="cgToggle(this)">
+      <span>${c.avatar || '👤'} ${escHtml(c.name)}</span>
+    </label>`).join('');
+  el('cgmems').innerHTML = html || '<div style="color:var(--text3);font-size:12px">Add friends first</div>';
+
+  el('cgm').classList.add('show');
+};
+window.closeCG = () => el('cgm').classList.remove('show');
+window.cgToggle = cb => { cb.checked ? cgSel.add(cb.value) : cgSel.delete(cb.value); };
+
+window.confirmCG = async () => {
+  const name   = el('cgn').value.trim();
+  const avatar = document.querySelector('#cgavp .avo.sel')?.dataset.av || '👥';
+  if (!name) { el('cgerr').textContent = 'Group name is required'; return; }
+  if (!cgSel.size) { el('cgerr').textContent = 'Add at least 1 member'; return; }
+
+  const members = { [CU.uid]: true };
+  cgSel.forEach(uid => members[uid] = true);
+
+  const gRef = push(ref(db, 'groups'));
+  const gid  = gRef.key;
+  await set(gRef, { id: gid, name, avatar, createdBy: CU.uid, createdAt: Date.now(), members });
+  await Promise.all(Object.keys(members).map(uid =>
+    set(ref(db, `userGroups/${uid}/${gid}`), true)
+  ));
+
+  closeCG();
+  toast('✅ Group created!');
+};
+
+// ── GROUP INFO (members) ──
+window.openGI = async () => {
+  if (!isGroup || !grpData) return;
+  const mUids = Object.keys(grpData.members || {});
+  el('gi-title').textContent = grpData.avatar + ' ' + grpData.name;
+  el('gi-list').innerHTML = mUids.map(uid => {
+    const m = memberCache[uid] || {};
+    const tag = grpData.createdBy === uid ? ' <span style="font-size:9px;color:var(--accent);font-weight:700">ADMIN</span>' : '';
+    return `<div class="ci" style="pointer-events:none">
+      <div class="ciav">${m.avatar || '👤'}</div>
+      <div class="cii"><div class="cin">${escHtml(m.name || uid)}${tag}</div></div>
+    </div>`;
+  }).join('');
+
+  // add member section
+  const nonMembers = Object.values(contacts).filter(c => !grpData.members[c.uid]);
+  el('gi-add').innerHTML = nonMembers.length ? `
+    <label style="font-size:11px;font-weight:600;color:var(--text2);letter-spacing:.5px;text-transform:uppercase">Add Member</label>
+    <div style="margin-top:8px;display:flex;flex-direction:column;gap:4px">
+      ${nonMembers.map(c => `
+        <label class="cg-member">
+          <input type="checkbox" value="${c.uid}" id="gi_${c.uid}">
+          <span>${c.avatar || '👤'} ${escHtml(c.name)}</span>
+        </label>`).join('')}
+    </div>
+    <button class="btnp" style="margin-top:10px" onclick="addGIMembers()">
+      <i class="fa fa-user-plus"></i> Add Selected
+    </button>` : '';
+
+  el('gim').classList.add('show');
+};
+window.closeGI = () => el('gim').classList.remove('show');
+
+window.addGIMembers = async () => {
+  const toAdd = Object.values(contacts)
+    .filter(c => document.getElementById('gi_' + c.uid)?.checked);
+  if (!toAdd.length) { toast('Select at least 1 person'); return; }
+  await Promise.all(toAdd.map(async c => {
+    await set(ref(db, `groups/${CCI}/members/${c.uid}`), true);
+    await set(ref(db, `userGroups/${c.uid}/${CCI}`), true);
+  }));
+  closeGI();
+  toast('✅ Members added!');
+};
+
+// ═══════════════════════════════════════
 //  LIVE REACTIONS (Google Meet style)
 // ═══════════════════════════════════════
 const LIVE_REACTS = ['🫂','🥰','😘','😁','😭','😂','🤣','🌚','😱','🥺','🥲','💋','😛'];
@@ -827,10 +1024,18 @@ function setupNotifForContact(uid, uName, uAvatar) {
 let typingTimer;
 function onTyping() {
   if (!CCI || !CU) return;
-  update(ref(db, `users/${CU.uid}`), { typingIn: CCI });
+  if (isGroup) {
+    update(ref(db, `groups/${CCI}/typing`), { [CU.uid]: Date.now() });
+  } else {
+    update(ref(db, `users/${CU.uid}`), { typingIn: CCI });
+  }
   clearTimeout(typingTimer);
   typingTimer = setTimeout(() => {
-    update(ref(db, `users/${CU.uid}`), { typingIn: null });
+    if (isGroup) {
+      update(ref(db, `groups/${CCI}/typing`), { [CU.uid]: null });
+    } else {
+      update(ref(db, `users/${CU.uid}`), { typingIn: null });
+    }
   }, 2500);
 }
 

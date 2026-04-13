@@ -1556,14 +1556,15 @@ function drawFBPath() {
 
 window.toggleDraw = function () {
   drawOpen = !drawOpen;
-  el('draw-panel').classList.toggle('hidden', !drawOpen);
-  if (drawOpen) {
+  const show = drawOpen;
+  el('draw-canvas').classList.toggle('hidden', !show);
+  el('draw-live').classList.toggle('hidden', !show);
+  el('draw-ftb').classList.toggle('hidden', !show);
+  // When draw is on, canvas intercepts mouse; messages still visible underneath
+  el('draw-canvas').style.pointerEvents = show ? 'all' : 'none';
+  if (show) {
     if (!drawInited) initDraw();
-    // Wait one frame so the panel is rendered and has real dimensions
-    requestAnimationFrame(() => {
-      sizeDraw();
-      if (CCI) startDrawSync();
-    });
+    requestAnimationFrame(() => { sizeDraw(); if (CCI) startDrawSync(); });
   }
 };
 
@@ -1574,25 +1575,25 @@ function initDraw() {
   drawLiveCtx = drawLiveCv.getContext('2d');
   drawInited  = true;
 
-  // ── drag the panel by its header ──
-  const panel = el('draw-panel');
-  const hdr   = panel.querySelector('.draw-hdr');
+  // ── drag the toolbar ──
+  const ftb  = el('draw-ftb');
+  const grip = el('draw-ftb-drag');
   let drag = null;
-  hdr.addEventListener('mousedown', e => {
-    if (e.target.tagName === 'BUTTON') return;
-    const r = panel.getBoundingClientRect();
+  grip.addEventListener('mousedown', e => {
+    const r = ftb.getBoundingClientRect();
     drag = { ox: e.clientX - r.left, oy: e.clientY - r.top };
-    panel.style.transition = 'none';
   });
   document.addEventListener('mousemove', e => {
     if (!drag) return;
-    panel.style.left = Math.max(0, e.clientX - drag.ox) + 'px';
-    panel.style.top  = Math.max(0, e.clientY - drag.oy) + 'px';
+    const wrap = el('ma-wrap').getBoundingClientRect();
+    ftb.style.left = Math.max(0, Math.min(e.clientX - drag.ox - wrap.left, wrap.width  - ftb.offsetWidth))  + 'px';
+    ftb.style.top  = Math.max(0, Math.min(e.clientY - drag.oy - wrap.top,  wrap.height - ftb.offsetHeight)) + 'px';
+    ftb.style.right = 'auto';
   });
   document.addEventListener('mouseup', () => { drag = null; });
 
-  // Re-size canvas when panel is resized
-  new ResizeObserver(() => { if (drawOpen) sizeDraw(true); }).observe(panel);
+  // Resize: re-fit canvases when window resizes
+  new ResizeObserver(() => { if (drawOpen) sizeDraw(true); }).observe(el('ma-wrap'));
 
   const on = (t, ev, fn, o) => t.addEventListener(ev, fn, o);
   on(drawCanvas, 'mousedown',  e => onDS(ptOf(e)));
@@ -1606,12 +1607,10 @@ function initDraw() {
 
 function sizeDraw(redraw) {
   if (!drawCanvas) return;
-  const wrap = el('draw-wrap');
-  const w = wrap.clientWidth;
-  const h = wrap.clientHeight;
+  const wrap = el('ma-wrap');
+  const w = wrap.clientWidth, h = wrap.clientHeight;
   if (!w || !h) return;
   [drawCanvas, drawLiveCv].forEach(c => { c.width = w; c.height = h; });
-  // After resize, re-render all existing strokes
   if (redraw && CCI) startDrawSync();
 }
 
@@ -1780,6 +1779,13 @@ window.setEraser = function (btn) {
   document.querySelectorAll('.dsb, .dshp').forEach(b => b.classList.remove('act'));
   btn.classList.add('act');
   drawIsEraser = true;
+  drawSize = parseInt(btn.dataset.es) || 28;
+};
+window.setEraserLg = function (btn) {
+  document.querySelectorAll('.dsb, .dshp').forEach(b => b.classList.remove('act'));
+  btn.classList.add('act');
+  drawIsEraser = true;
+  drawSize = parseInt(btn.dataset.es) || 55;
 };
 window.setShape = function (btn) {
   document.querySelectorAll('.dshp').forEach(b => b.classList.remove('act'));

@@ -1607,10 +1607,19 @@ function initDraw() {
 
 function sizeDraw(redraw) {
   if (!drawCanvas) return;
-  const wrap = el('ma-wrap');
-  const w = wrap.clientWidth, h = wrap.clientHeight;
+  const ma = el('ma');            // size to message pane, not full wrap
+  const w  = ma.clientWidth;
+  const h  = ma.clientHeight;
   if (!w || !h) return;
-  [drawCanvas, drawLiveCv].forEach(c => { c.width = w; c.height = h; });
+  // Position canvases to sit exactly over #ma
+  [drawCanvas, drawLiveCv].forEach(c => {
+    c.width  = w;
+    c.height = h;
+    c.style.width  = w + 'px';
+    c.style.height = h + 'px';
+    c.style.top    = ma.offsetTop + 'px';
+    c.style.left   = ma.offsetLeft + 'px';
+  });
   if (redraw && CCI) startDrawSync();
 }
 

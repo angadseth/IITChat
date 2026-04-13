@@ -477,6 +477,7 @@ window.showRP = (e, bub, mid, isMe) => {
   const picker = document.createElement('div');
   picker.className = 'rpk';
   let html = `<span class="rpk-reply" title="Reply" onclick="setReply('${mid}','${escJs(msgText)}','${escJs(senderName)}');this.closest('.rpk').remove()">↩️</span>`;
+  html += `<span class="rpk-reply" title="Copy" onclick="copyMsg('${mid}');this.closest('.rpk').remove()">📋</span>`;
   html += REACTS.map(r =>
     `<span onclick="addRct('${mid}','${r}');this.closest('.rpk').remove()">${r}</span>`
   ).join('');
@@ -493,6 +494,15 @@ window.setReply = (id, text, senderName) => {
   el('reply-preview').textContent = text.length > 60 ? text.substring(0, 60) + '…' : text;
   bar.classList.remove('hidden');
   el('msgi').focus();
+};
+
+window.copyMsg = mid => {
+  const row  = document.querySelector(`[data-mid="${mid}"]`);
+  const text = row?.querySelector('.bub')?.innerText?.trim();
+  if (!text) { toast('❌ Nothing to copy'); return; }
+  navigator.clipboard.writeText(text)
+    .then(() => toast('📋 Copied!'))
+    .catch(() => toast('❌ Copy failed'));
 };
 
 window.cancelReply = () => {

@@ -61,12 +61,15 @@ let unreadCounts  = JSON.parse(localStorage.getItem('iitchat-unread') || '{}');
 let ctListeners   = [];     // contact-level listeners to clean up on reload
 
 // ── music state ──
-let ytPlayer      = null;   // YouTube IFrame player
-let ytReady       = false;  // IFrame API loaded?
-let musicUnsub    = null;   // Firebase music listener
-let mpSyncing     = false;  // prevent feedback loop when syncing from Firebase
-let mpOpen        = false;  // panel open?
-let mpPendingSeek = null;   // { seekOffset, seekStartedAt, shouldPlay } — applied in onReady
+let ytPlayer       = null;   // YouTube IFrame player
+let ytReady        = false;  // IFrame API loaded?
+let musicUnsub     = null;   // Firebase music listener
+let mpSyncing      = false;  // prevent feedback loop when syncing from Firebase
+let mpOpen         = false;  // panel open?
+let mpPendingSeek  = null;   // { seekOffset, seekStartedAt, shouldPlay } — applied in onReady
+let mpLastFB       = null;   // last Firebase music snapshot (for drift detection)
+let mpSyncInterval = null;   // seek-drift polling interval
+let mpLastSeekedAt = 0;      // tracks which seekedAt we last applied
 
 function saveUnread() { localStorage.setItem('iitchat-unread', JSON.stringify(unreadCounts)); }
 
@@ -1397,12 +1400,17 @@ function onYTReady(e) {
 function onYTState(e) {
   if (mpSyncing || !CCI) return;
   const path = musicPath();
+  const now  = Date.now();
   if (e.data === YT.PlayerState.PLAYING) {
     const ct = ytPlayer.getCurrentTime() || 0;
-    update(ref(db, path), { playing: true, seekedTo: ct, seekedAt: Date.now() });
+    mpLastFB = { ...(mpLastFB || {}), playing: true,  seekedTo: ct, seekedAt: now };
+    mpLastSeekedAt = now;
+    update(ref(db, path), { playing: true,  seekedTo: ct, seekedAt: now });
   } else if (e.data === YT.PlayerState.PAUSED) {
     const ct = ytPlayer.getCurrentTime() || 0;
-    update(ref(db, path), { playing: false, seekedTo: ct, seekedAt: Date.now() });
+    mpLastFB = { ...(mpLastFB || {}), playing: false, seekedTo: ct, seekedAt: now };
+    mpLastSeekedAt = now;
+    update(ref(db, path), { playing: false, seekedTo: ct, seekedAt: now });
   }
 }
 
@@ -1433,35 +1441,91 @@ function renderNowPlaying(m) {
   if (!mpOpen) window.toggleMusic();
 }
 
+// ── Seek-drift polling: detect when THIS user scrubs and push to Firebase ──
+function startSeekPoll() {
+  if (mpSyncInterval) clearInterval(mpSyncInterval);
+  mpSyncInterval = setInterval(() => {
+    if (!ytPlayer || !CCI || mpSyncing || !mpLastFB) return;
+    if (typeof ytPlayer.getPlayerState !== 'function') return;
+    if (ytPlayer.getPlayerState() !== YT.PlayerState.PLAYING) return;
+
+    const ct       = ytPlayer.getCurrentTime();
+    const elapsed  = (Date.now() - mpLastFB.seekedAt) / 1000;
+    const expected = (mpLastFB.seekedTo || 0) + elapsed;
+
+    if (Math.abs(ct - expected) > 3) {
+      // User scrubbed — push new position so the other user follows
+      mpSyncing = true;
+      const now = Date.now();
+      mpLastFB = { ...mpLastFB, seekedTo: ct, seekedAt: now };
+      mpLastSeekedAt = now;
+      update(ref(db, musicPath()), { seekedTo: ct, seekedAt: now, playing: true });
+      setTimeout(() => { mpSyncing = false; }, 700);
+    }
+  }, 1200);
+}
+
+function applyRemoteSeek(m) {
+  // Recalculate exact position at this instant
+  const elapsed = m.playing ? (Date.now() - m.seekedAt) / 1000 : 0;
+  const ct = (m.seekedTo || 0) + elapsed;
+  mpSyncing = true;
+  try {
+    ytPlayer?.seekTo?.(ct, true);
+    setTimeout(() => {
+      try {
+        if (m.playing) ytPlayer?.playVideo?.();
+        else ytPlayer?.pauseVideo?.();
+      } catch (_) {}
+      mpSyncing = false;
+    }, 400);
+  } catch (_) { mpSyncing = false; }
+}
+
 function startMusicSync(chatId) {
   if (musicUnsub) { musicUnsub(); musicUnsub = null; }
+  if (mpSyncInterval) { clearInterval(mpSyncInterval); mpSyncInterval = null; }
+  mpLastFB = null; mpLastSeekedAt = 0;
+
   const path = isGroup ? `groups/${chatId}/music` : `chats/${chatId}/music`;
   let lastVid = null;
+
   musicUnsub = onValue(ref(db, path), snap => {
     const m = snap.val();
     if (!m) {
       el('mp-player-wrap').classList.add('hidden');
       el('mp-now-title').textContent = '';
       if (ytPlayer && typeof ytPlayer.stopVideo === 'function') ytPlayer.stopVideo();
-      lastVid = null;
+      lastVid = null; mpLastFB = null;
+      if (mpSyncInterval) { clearInterval(mpSyncInterval); mpSyncInterval = null; }
       return;
     }
 
+    mpLastFB = m;
     renderNowPlaying(m);
 
     if (m.videoId !== lastVid) {
+      // ── New song ──
       lastVid = m.videoId;
+      mpLastSeekedAt = m.seekedAt;
       mpSyncing = true;
       mpLoadPlayer(m.videoId, m.seekedTo || 0, m.seekedAt, m.playing);
-      // mpSyncing cleared inside onYTReady
+      // mpSyncing cleared in onYTReady; start drift poll after player ready
+      setTimeout(startSeekPoll, 2000);
+
+    } else if (m.seekedAt !== mpLastSeekedAt) {
+      // ── Same song, but someone scrubbed ──
+      mpLastSeekedAt = m.seekedAt;
+      applyRemoteSeek(m);
+
     } else if (!mpSyncing) {
-      // same song — just sync play/pause state
+      // ── Same song, same seek position — just mirror play/pause ──
       mpSyncing = true;
       try {
         if (m.playing) ytPlayer?.playVideo?.();
         else ytPlayer?.pauseVideo?.();
       } catch (_) {}
-      setTimeout(() => { mpSyncing = false; }, 600);
+      setTimeout(() => { mpSyncing = false; }, 500);
     }
   });
 }

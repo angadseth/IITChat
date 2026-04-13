@@ -77,9 +77,10 @@ body {
 
 /* ── AUTH ── */
 #auth-screen {
-  position: fixed; inset: 0; z-index: 100;
+  position: fixed; inset: 0; bottom: 32px; z-index: 100;
   background: var(--bg);
   display: flex; align-items: center; justify-content: center;
+  overflow-y: auto;
 }
 .ag {
   position: absolute;
@@ -173,7 +174,7 @@ body {
 
 /* ── APP SHELL ── */
 #app { display: none; height: 100vh; flex-direction: column; }
-.shell { display: flex; height: 100vh; position: relative; }
+.shell { display: flex; height: calc(100vh - 32px); position: relative; }
 
 /* ── SIDEBAR ── */
 .sidebar {
@@ -534,7 +535,7 @@ body {
 .toast.show { transform: translateX(-50%) translateY(0); }
 
 /* ── GROUPS SIDEBAR SECTION ── */
-.grp-sec { border-top: 1px solid var(--border); }
+.grp-sec { border-top: 1px solid var(--border); padding-bottom: 6px; }
 .grp-hd {
   display: flex; align-items: center; justify-content: space-between;
   padding: 10px 14px 6px;

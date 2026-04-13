@@ -66,6 +66,7 @@ let ytReady       = false;  // IFrame API loaded?
 let musicUnsub    = null;   // Firebase music listener
 let mpSyncing     = false;  // prevent feedback loop when syncing from Firebase
 let mpOpen        = false;  // panel open?
+let mpPendingSeek = null;   // { seekOffset, seekStartedAt, shouldPlay } — applied in onReady
 
 function saveUnread() { localStorage.setItem('iitchat-unread', JSON.stringify(unreadCounts)); }
 
@@ -1290,7 +1291,13 @@ window.mpSearch = async function () {
   // If user pasted a YouTube URL → play directly
   const directVid = extractVid(raw);
   if (directVid) {
-    mpPlay(directVid, raw);
+    // fetch title via oEmbed so receiver sees a real name
+    let title = raw;
+    try {
+      const oe = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${directVid}&format=json`);
+      if (oe.ok) { const d = await oe.json(); title = d.title || raw; }
+    } catch (_) {}
+    mpPlay(directVid, title);
     return;
   }
 
@@ -1314,16 +1321,17 @@ window.mpSearch = async function () {
     return;
   }
 
-  res.innerHTML = results.slice(0, 10).map(item =>
-    `<div class="mp-result" onclick="mpPlay('${item.vid}','${escAttr(item.title)}')">
-      <img class="mp-thumb" src="${item.thumb}" onerror="this.style.display='none'">
+  res.innerHTML = results.slice(0, 10).map(item => {
+    const thumb = item.thumb || `https://img.youtube.com/vi/${item.vid}/mqdefault.jpg`;
+    return `<div class="mp-result" onclick="mpPlay('${item.vid}','${escAttr(item.title)}','${escAttr(thumb)}')">
+      <img class="mp-thumb" src="${thumb}" onerror="this.src='https://img.youtube.com/vi/${item.vid}/mqdefault.jpg'">
       <div class="mp-rmeta">
         <div class="mp-rtitle">${item.title}</div>
         <div class="mp-rsub">${item.sub}${item.dur ? ' · ' + item.dur : ''}</div>
       </div>
       <div class="mp-play-ico">▶</div>
-    </div>`
-  ).join('');
+    </div>`;
+  }).join('');
 };
 
 function fmtDur(s) {
@@ -1332,40 +1340,58 @@ function fmtDur(s) {
 }
 function escAttr(s) { return (s || '').replace(/'/g, "&#39;").replace(/"/g, "&quot;"); }
 
-window.mpPlay = async function (videoId, title) {
+window.mpPlay = async function (videoId, title, thumb) {
   if (!CCI) { toast('Open a chat first'); return; }
+  const thumbnail = thumb || `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
   await set(ref(db, musicPath()), {
-    videoId, title,
+    videoId, title, thumbnail,
     playing: true, seekedTo: 0, seekedAt: Date.now(), by: CU.uid
   });
-  // open panel if closed
   if (!mpOpen) window.toggleMusic();
   toast('🎵 Playing for both!');
 };
 
-function mpLoadPlayer(videoId, seekTo) {
+// mpLoadPlayer — seekStartedAt is the Date.now() when playback began (for accurate live calc)
+function mpLoadPlayer(videoId, seekOffset, seekStartedAt, shouldPlay) {
   el('mp-player-wrap').classList.remove('hidden');
   const wrap = el('yt-player');
+
   if (ytPlayer && typeof ytPlayer.loadVideoById === 'function') {
-    try { ytPlayer.loadVideoById({ videoId, startSeconds: Math.floor(seekTo) }); } catch (_) {}
+    // existing player — load new video, then seek accurately in onReady via a one-shot flag
+    mpPendingSeek = { seekOffset, seekStartedAt, shouldPlay };
+    try { ytPlayer.loadVideoById(videoId); } catch (_) {}
     return;
   }
-  if (!ytReady) { setTimeout(() => mpLoadPlayer(videoId, seekTo), 400); return; }
-  // destroy old player div and recreate (avoids double-init issues)
+  if (!ytReady) { setTimeout(() => mpLoadPlayer(videoId, seekOffset, seekStartedAt, shouldPlay), 400); return; }
+
   wrap.innerHTML = '';
   const div = document.createElement('div');
   div.id = 'yt-inner';
   wrap.appendChild(div);
+  mpPendingSeek = { seekOffset, seekStartedAt, shouldPlay };
   ytPlayer = new YT.Player('yt-inner', {
     height: '170', width: '100%',
     videoId,
-    playerVars: {
-      autoplay: 1, controls: 1,
-      start: Math.floor(seekTo),
-      modestbranding: 1, rel: 0, iv_load_policy: 3
-    },
-    events: { onStateChange: onYTState }
+    playerVars: { autoplay: 0, controls: 1, modestbranding: 1, rel: 0, iv_load_policy: 3 },
+    events: {
+      onReady: onYTReady,
+      onStateChange: onYTState
+    }
   });
+}
+
+function onYTReady(e) {
+  if (!mpPendingSeek) return;
+  const { seekOffset, seekStartedAt, shouldPlay } = mpPendingSeek;
+  mpPendingSeek = null;
+  // Calculate exact position at this moment
+  const elapsed = seekStartedAt ? (Date.now() - seekStartedAt) / 1000 : 0;
+  const ct = seekOffset + (shouldPlay ? elapsed : 0);
+  mpSyncing = true;
+  e.target.seekTo(ct, true);
+  if (shouldPlay) e.target.playVideo();
+  else e.target.pauseVideo();
+  setTimeout(() => { mpSyncing = false; }, 800);
 }
 
 function onYTState(e) {
@@ -1392,7 +1418,20 @@ window.mpStop = async function () {
   if (ytPlayer && typeof ytPlayer.stopVideo === 'function') ytPlayer.stopVideo();
   el('mp-player-wrap').classList.add('hidden');
   el('mp-now-title').textContent = '';
+  lastVid = null;
 };
+
+function renderNowPlaying(m) {
+  el('mp-now-title').textContent = m.title || 'Now Playing';
+  const thumb = m.thumbnail || `https://img.youtube.com/vi/${m.videoId}/mqdefault.jpg`;
+  const ytUrl = `https://www.youtube.com/watch?v=${m.videoId}`;
+  el('mp-np-thumb').src = thumb;
+  el('mp-np-thumb').onerror = () => { el('mp-np-thumb').src = `https://img.youtube.com/vi/${m.videoId}/mqdefault.jpg`; };
+  el('mp-np-ytlink').href = ytUrl;
+  el('mp-player-wrap').classList.remove('hidden');
+  // open music panel automatically for receiver
+  if (!mpOpen) window.toggleMusic();
+}
 
 function startMusicSync(chatId) {
   if (musicUnsub) { musicUnsub(); musicUnsub = null; }
@@ -1407,18 +1446,16 @@ function startMusicSync(chatId) {
       lastVid = null;
       return;
     }
-    el('mp-now-title').textContent = '🎵 ' + (m.title || '');
-    const elapsed = (Date.now() - m.seekedAt) / 1000;
-    const seekTo  = (m.seekedTo || 0) + (m.playing ? elapsed : 0);
+
+    renderNowPlaying(m);
 
     if (m.videoId !== lastVid) {
-      // new song — reload player
       lastVid = m.videoId;
       mpSyncing = true;
-      mpLoadPlayer(m.videoId, seekTo);
-      setTimeout(() => { mpSyncing = false; }, 1500);
+      mpLoadPlayer(m.videoId, m.seekedTo || 0, m.seekedAt, m.playing);
+      // mpSyncing cleared inside onYTReady
     } else if (!mpSyncing) {
-      // same song, sync play/pause
+      // same song — just sync play/pause state
       mpSyncing = true;
       try {
         if (m.playing) ytPlayer?.playVideo?.();

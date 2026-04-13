@@ -864,3 +864,78 @@ body {
   border-radius: 50%; animation: mpSpin 0.7s linear infinite;
   vertical-align: middle; margin-right: 6px;
 }
+
+/* ── LIVE DRAW PANEL ── */
+.draw-panel {
+  position: absolute;
+  top: 54px; left: 50%; transform: translateX(-50%);
+  width: min(380px, calc(100% - 16px));
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  z-index: 121;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+.draw-hdr {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 12px 8px;
+  font-size: 13px; font-weight: 600; color: var(--text);
+  border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.draw-hdr-right { display: flex; align-items: center; gap: 6px; }
+.draw-clear-btn {
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 8px; padding: 4px 9px; cursor: pointer;
+  font-size: 11px; color: var(--text2); transition: var(--tr); font-family: inherit;
+}
+.draw-clear-btn:hover { background: var(--red); color: #fff; border-color: var(--red); }
+.draw-x {
+  background: none; border: none; cursor: pointer;
+  color: var(--text2); font-size: 15px; padding: 2px 6px;
+  border-radius: 6px; transition: var(--tr);
+}
+.draw-x:hover { background: var(--bg3); color: var(--text); }
+
+/* Toolbar */
+.draw-toolbar { padding: 8px 10px 6px; flex-shrink: 0; }
+.draw-colors {
+  display: flex; gap: 6px; margin-bottom: 7px; flex-wrap: wrap;
+}
+.dco {
+  width: 22px; height: 22px; border-radius: 50%; cursor: pointer;
+  border: 2px solid transparent; transition: var(--tr); flex-shrink: 0;
+}
+.dco.act { border-color: #fff; transform: scale(1.2); }
+.dco:hover { transform: scale(1.15); }
+
+.draw-row2 { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.draw-sizes { display: flex; gap: 4px; align-items: center; }
+.draw-shapes { display: flex; gap: 4px; }
+.dsb, .dshp {
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 7px; cursor: pointer; color: var(--text2);
+  transition: var(--tr); font-size: 13px; font-family: inherit;
+  padding: 4px 8px; line-height: 1;
+}
+.dsb { min-width: 28px; text-align: center; }
+.dsb[data-s="3"]  { font-size: 10px; font-weight: 900; }
+.dsb[data-s="7"]  { font-size: 14px; font-weight: 900; }
+.dsb[data-s="16"] { font-size: 18px; font-weight: 900; }
+.dsb:hover, .dshp:hover { background: var(--bg); color: var(--text); }
+.dsb.act, .dshp.act { background: var(--accent); color: #fff; border-color: var(--accent); }
+.erase-btn.act { background: var(--red); border-color: var(--red); color: #fff; }
+
+/* Canvas area */
+.draw-wrap {
+  position: relative; flex: 1; background: #111118;
+  border-top: 1px solid var(--border); cursor: crosshair;
+}
+#draw-canvas {
+  display: block; position: absolute; top: 0; left: 0;
+}
+.draw-live-layer {
+  display: block; position: absolute; top: 0; left: 0;
+  pointer-events: none;
+}

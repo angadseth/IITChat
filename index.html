@@ -163,6 +163,7 @@
               <i class="fa fa-info-circle"></i>
             </button>
             <button class="ib" id="mpb" title="Shared Music" onclick="toggleMusic()">🎵</button>
+            <button class="ib" id="drb" title="Live Draw" onclick="toggleDraw()">🎨</button>
           <button class="ib" id="lrb" title="Live Reaction" onclick="toggleLRP()">❤️</button>
             <button class="ib" title="Clear Chat" onclick="clearChat()">
               <i class="fa fa-trash"></i>
@@ -173,6 +174,47 @@
 
         <!-- Floating reaction canvas -->
         <div id="rcanvas" class="rcanvas"></div>
+
+        <!-- 🎨 Live Draw Panel -->
+        <div class="draw-panel hidden" id="draw-panel">
+          <div class="draw-hdr">
+            <span>🎨 Live Draw</span>
+            <div class="draw-hdr-right">
+              <button class="draw-clear-btn" onclick="clearDraw()" title="Clear for both">🗑️ Clear</button>
+              <button class="draw-x" onclick="toggleDraw()">✕</button>
+            </div>
+          </div>
+          <div class="draw-toolbar">
+            <div class="draw-colors">
+              <div class="dco act" style="background:#ffffff" data-c="#ffffff" onclick="setDC(this)"></div>
+              <div class="dco" style="background:#ff4f6b" data-c="#ff4f6b" onclick="setDC(this)"></div>
+              <div class="dco" style="background:#43e97b" data-c="#43e97b" onclick="setDC(this)"></div>
+              <div class="dco" style="background:#6c63ff" data-c="#6c63ff" onclick="setDC(this)"></div>
+              <div class="dco" style="background:#ffd700" data-c="#ffd700" onclick="setDC(this)"></div>
+              <div class="dco" style="background:#ff9a00" data-c="#ff9a00" onclick="setDC(this)"></div>
+              <div class="dco" style="background:#00cfff" data-c="#00cfff" onclick="setDC(this)"></div>
+              <div class="dco" style="background:#ff69b4" data-c="#ff69b4" onclick="setDC(this)"></div>
+            </div>
+            <div class="draw-row2">
+              <div class="draw-sizes">
+                <button class="dsb act" data-s="3"  onclick="setDS(this)" title="Thin">–</button>
+                <button class="dsb"     data-s="7"  onclick="setDS(this)" title="Medium">–</button>
+                <button class="dsb"     data-s="16" onclick="setDS(this)" title="Thick">–</button>
+                <button class="dsb erase-btn" onclick="setEraser(this)" title="Eraser">⌫</button>
+              </div>
+              <div class="draw-shapes">
+                <button class="dshp act" data-sh="free"   onclick="setShape(this)" title="Free draw">✏️</button>
+                <button class="dshp"     data-sh="line"   onclick="setShape(this)" title="Line">╱</button>
+                <button class="dshp"     data-sh="rect"   onclick="setShape(this)" title="Rectangle">▭</button>
+                <button class="dshp"     data-sh="circle" onclick="setShape(this)" title="Circle">◯</button>
+              </div>
+            </div>
+          </div>
+          <div class="draw-wrap" id="draw-wrap">
+            <canvas id="draw-canvas"></canvas>
+            <canvas id="draw-live" class="draw-live-layer"></canvas>
+          </div>
+        </div>
 
         <!-- 🎵 Shared Music Panel -->
         <div class="music-panel hidden" id="music-panel">

@@ -658,12 +658,11 @@ window.closeSP = e  => { if (e.target === el('spp')) el('spp').classList.remove(
 window.setTheme = th => { applyTheme(th); localStorage.setItem('iitchat-theme', th); };
 
 window.toggleSB = () => {
-  const sb = document.querySelector('.sidebar');
-  const open = sb.classList.toggle('sb-hidden');
-  localStorage.setItem('sb-open', !open);
-  document.querySelectorAll('.sbtgl i').forEach(i => {
-    i.className = open ? 'fa fa-bars' : 'fa fa-bars';
-  });
+  const sb  = document.querySelector('.sidebar');
+  const tab = el('sb-open-tab');
+  const isNowHidden = sb.classList.toggle('sb-hidden');
+  tab.classList.toggle('hidden', !isNowHidden);
+  localStorage.setItem('sb-open', String(!isNowHidden));
 };
 
 function applyTheme(th) {

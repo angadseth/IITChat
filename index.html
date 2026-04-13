@@ -78,9 +78,17 @@
 <div id="app">
   <div class="shell">
 
+    <!-- Floating sidebar open tab (visible when sidebar is closed) -->
+    <div class="sb-open-tab hidden" id="sb-open-tab" onclick="toggleSB()" title="Open Sidebar">
+      <i class="fa fa-chevron-right"></i>
+    </div>
+
     <!-- SIDEBAR -->
     <div class="sidebar">
       <div class="sbh">
+        <button class="sb-close-btn" onclick="toggleSB()" title="Close Sidebar">
+          <i class="fa fa-chevron-left"></i>
+        </button>
         <div class="myav" id="myav" onclick="openSP()">
           <div class="sd"></div>
         </div>
@@ -133,9 +141,6 @@
     <div class="ca">
       <!-- Welcome -->
       <div class="cw" id="cwel">
-        <button class="ib sbtgl" onclick="toggleSB()" title="Toggle Sidebar" style="position:absolute;top:14px;left:14px">
-          <i class="fa fa-bars"></i>
-        </button>
         <div class="cwi">💬</div>
         <h2>Welcome to IIT Chat</h2>
         <p>Select a friend to start chatting</p>
@@ -148,9 +153,6 @@
       <!-- Active Chat -->
       <div id="acd" class="hidden" style="display:flex;flex-direction:column;height:100%;position:relative">
         <div class="chd">
-          <button class="ib sbtgl" id="sbtgl" onclick="toggleSB()" title="Toggle Sidebar">
-            <i class="fa fa-bars"></i>
-          </button>
           <div class="chav" id="chav"></div>
           <div class="chi">
             <div class="chn" id="chn"></div>

@@ -181,7 +181,16 @@ body {
   background: var(--bg2);
   border-right: 1px solid var(--border);
   display: flex; flex-direction: column;
+  transition: width 0.28s cubic-bezier(0.4,0,0.2,1),
+              min-width 0.28s cubic-bezier(0.4,0,0.2,1),
+              border 0.28s;
+  overflow: hidden;
 }
+.sidebar.sb-hidden {
+  width: 0 !important; min-width: 0 !important;
+  border-right: none;
+}
+.sbtgl { flex-shrink: 0; }
 .sbh {
   padding: 18px 18px 14px;
   border-bottom: 1px solid var(--border);

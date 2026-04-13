@@ -133,6 +133,9 @@
     <div class="ca">
       <!-- Welcome -->
       <div class="cw" id="cwel">
+        <button class="ib sbtgl" onclick="toggleSB()" title="Toggle Sidebar" style="position:absolute;top:14px;left:14px">
+          <i class="fa fa-bars"></i>
+        </button>
         <div class="cwi">💬</div>
         <h2>Welcome to IIT Chat</h2>
         <p>Select a friend to start chatting</p>
@@ -145,6 +148,9 @@
       <!-- Active Chat -->
       <div id="acd" class="hidden" style="display:flex;flex-direction:column;height:100%;position:relative">
         <div class="chd">
+          <button class="ib sbtgl" id="sbtgl" onclick="toggleSB()" title="Toggle Sidebar">
+            <i class="fa fa-bars"></i>
+          </button>
           <div class="chav" id="chav"></div>
           <div class="chi">
             <div class="chn" id="chn"></div>

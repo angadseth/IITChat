@@ -180,23 +180,22 @@
             <span>🎵 Shared Music</span>
             <button class="mp-x" onclick="toggleMusic()">✕</button>
           </div>
-          <!-- Now playing bar -->
+          <!-- Now playing -->
           <div class="mp-player-wrap hidden" id="mp-player-wrap">
-            <div id="yt-player"></div>
-            <div class="mp-now">
-              <div class="mp-now-title" id="mp-now-title"></div>
-              <div class="mp-now-ctrls">
-                <button class="mp-ctrl-btn" onclick="mpTogglePlay()" title="Play/Pause">⏯</button>
-                <button class="mp-ctrl-btn" onclick="mpStop()" title="Stop & clear for both">⏹</button>
-              </div>
+            <div class="mp-now-title" id="mp-now-title"></div>
+            <div id="yt-player" class="yt-player-box"></div>
+            <div class="mp-stop-row">
+              <button class="mp-stop-btn" onclick="mpStop()">⏹ Stop for both</button>
             </div>
           </div>
           <!-- Search -->
           <div class="mp-search-row">
-            <input class="mp-search-inp" id="mp-search-inp" placeholder="Search song / artist…"
+            <input class="mp-search-inp" id="mp-search-inp"
+              placeholder="Search song / paste YouTube link…"
               onkeydown="if(event.key==='Enter')mpSearch()">
             <button class="mp-search-btn" onclick="mpSearch()"><i class="fa fa-search"></i></button>
           </div>
+          <div class="mp-hint">Paste a YouTube / YouTube Music URL to play instantly</div>
           <div class="mp-results" id="mp-results"></div>
         </div>
 

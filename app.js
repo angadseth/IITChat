@@ -1225,78 +1225,147 @@ window.toggleMusic = function () {
   if (mpOpen) el('mp-search-inp').focus();
 };
 
-window.mpSearch = async function () {
-  const q = el('mp-search-inp').value.trim();
-  if (!q) return;
-  const res = el('mp-results');
-  res.innerHTML = '<div class="mp-loading">Searching…</div>';
-  try {
-    const PIPED_INSTANCES = [
-      'https://pipedapi.kavin.rocks',
-      'https://api.piped.projectsegfau.lt',
-      'https://piped-api.garudalinux.org'
-    ];
-    let data = null;
-    for (const base of PIPED_INSTANCES) {
-      try {
-        const r = await fetch(`${base}/search?q=${encodeURIComponent(q)}&filter=music_songs`);
-        if (r.ok) { data = await r.json(); break; }
-      } catch (_) {}
-    }
-    if (!data) throw new Error('All instances failed');
-    const items = (data.items || []).filter(i => i.url && i.url.includes('watch'));
-    if (!items.length) { res.innerHTML = '<div class="mp-loading">No results</div>'; return; }
-    res.innerHTML = items.slice(0, 8).map(item => {
-      const vid = item.url.split('v=')[1]?.split('&')[0];
-      if (!vid) return '';
-      const dur = item.duration > 0 ? fmtDur(item.duration) : '';
-      return `<div class="mp-result" onclick="mpPlay('${vid}','${escAttr(item.title)}')">
-        <img class="mp-thumb" src="${item.thumbnail || ''}" onerror="this.style.display='none'">
-        <div class="mp-rmeta">
-          <div class="mp-rtitle">${item.title}</div>
-          <div class="mp-rsub">${item.uploaderName || ''} ${dur ? '· '+dur : ''}</div>
-        </div>
-      </div>`;
-    }).join('');
-  } catch (err) {
-    res.innerHTML = '<div class="mp-loading">Search failed. Try again.</div>';
+// Try to extract a YouTube video ID from a URL or plain ID string
+function extractVid(str) {
+  str = str.trim();
+  // full URL forms
+  const patterns = [
+    /[?&]v=([A-Za-z0-9_-]{11})/,
+    /youtu\.be\/([A-Za-z0-9_-]{11})/,
+    /embed\/([A-Za-z0-9_-]{11})/,
+    /shorts\/([A-Za-z0-9_-]{11})/,
+    /music\.youtube\.com\/watch\?v=([A-Za-z0-9_-]{11})/
+  ];
+  for (const p of patterns) {
+    const m = str.match(p);
+    if (m) return m[1];
   }
+  // bare 11-char ID
+  if (/^[A-Za-z0-9_-]{11}$/.test(str)) return str;
+  return null;
+}
+
+// ── search via multiple free APIs ──
+const SEARCH_ENDPOINTS = [
+  // Piped instances (return {items:[{url,title,thumbnail,uploaderName,duration}]})
+  q => ({ url: `https://pipedapi.kavin.rocks/search?q=${encodeURIComponent(q)}&filter=all`, type: 'piped' }),
+  q => ({ url: `https://api.piped.projectsegfau.lt/search?q=${encodeURIComponent(q)}&filter=all`, type: 'piped' }),
+  q => ({ url: `https://piped-api.garudalinux.org/search?q=${encodeURIComponent(q)}&filter=all`, type: 'piped' }),
+  // Invidious instances (return [{videoId,title,videoThumbnails,author,lengthSeconds}])
+  q => ({ url: `https://invidious.nerdvpn.de/api/v1/search?q=${encodeURIComponent(q)}&type=video`, type: 'invidious' }),
+  q => ({ url: `https://inv.tmate.io/api/v1/search?q=${encodeURIComponent(q)}&type=video`, type: 'invidious' }),
+  q => ({ url: `https://yt.cdaut.de/api/v1/search?q=${encodeURIComponent(q)}&type=video`, type: 'invidious' }),
+];
+
+function normalisePiped(data) {
+  return (data.items || [])
+    .filter(i => i.url && i.url.includes('watch'))
+    .map(i => ({
+      vid: i.url.split('v=')[1]?.split('&')[0],
+      title: i.title || '',
+      thumb: i.thumbnail || '',
+      sub: i.uploaderName || '',
+      dur: i.duration > 0 ? fmtDur(i.duration) : ''
+    }))
+    .filter(i => i.vid);
+}
+
+function normaliseInvidious(data) {
+  return (Array.isArray(data) ? data : [])
+    .map(i => ({
+      vid: i.videoId,
+      title: i.title || '',
+      thumb: (i.videoThumbnails || []).find(t => t.quality === 'medium')?.url
+          || (i.videoThumbnails || [])[0]?.url || '',
+      sub: i.author || '',
+      dur: i.lengthSeconds > 0 ? fmtDur(i.lengthSeconds) : ''
+    }))
+    .filter(i => i.vid);
+}
+
+window.mpSearch = async function () {
+  const raw = el('mp-search-inp').value.trim();
+  if (!raw) return;
+
+  // If user pasted a YouTube URL → play directly
+  const directVid = extractVid(raw);
+  if (directVid) {
+    mpPlay(directVid, raw);
+    return;
+  }
+
+  const res = el('mp-results');
+  res.innerHTML = '<div class="mp-loading"><span class="mp-spin"></span> Searching…</div>';
+
+  let results = [];
+  for (const ep of SEARCH_ENDPOINTS) {
+    const { url, type } = ep(raw);
+    try {
+      const r = await fetch(url, { signal: AbortSignal.timeout(5000) });
+      if (!r.ok) continue;
+      const data = await r.json();
+      results = type === 'piped' ? normalisePiped(data) : normaliseInvidious(data);
+      if (results.length) break;
+    } catch (_) {}
+  }
+
+  if (!results.length) {
+    res.innerHTML = `<div class="mp-loading">No results — try pasting a YouTube link directly</div>`;
+    return;
+  }
+
+  res.innerHTML = results.slice(0, 10).map(item =>
+    `<div class="mp-result" onclick="mpPlay('${item.vid}','${escAttr(item.title)}')">
+      <img class="mp-thumb" src="${item.thumb}" onerror="this.style.display='none'">
+      <div class="mp-rmeta">
+        <div class="mp-rtitle">${item.title}</div>
+        <div class="mp-rsub">${item.sub}${item.dur ? ' · ' + item.dur : ''}</div>
+      </div>
+      <div class="mp-play-ico">▶</div>
+    </div>`
+  ).join('');
 };
 
 function fmtDur(s) {
   const m = Math.floor(s / 60), sec = s % 60;
-  return `${m}:${String(sec).padStart(2,'0')}`;
+  return `${m}:${String(sec).padStart(2, '0')}`;
 }
-function escAttr(s) { return (s||'').replace(/'/g,"&#39;").replace(/"/g,"&quot;"); }
+function escAttr(s) { return (s || '').replace(/'/g, "&#39;").replace(/"/g, "&quot;"); }
 
 window.mpPlay = async function (videoId, title) {
   if (!CCI) { toast('Open a chat first'); return; }
-  const path = musicPath();
-  await set(ref(db, path), {
-    videoId,
-    title,
-    playing: true,
-    seekedTo: 0,
-    seekedAt: Date.now(),
-    by: CU.uid
+  await set(ref(db, musicPath()), {
+    videoId, title,
+    playing: true, seekedTo: 0, seekedAt: Date.now(), by: CU.uid
   });
+  // open panel if closed
+  if (!mpOpen) window.toggleMusic();
   toast('🎵 Playing for both!');
 };
 
 function mpLoadPlayer(videoId, seekTo) {
   el('mp-player-wrap').classList.remove('hidden');
+  const wrap = el('yt-player');
   if (ytPlayer && typeof ytPlayer.loadVideoById === 'function') {
-    ytPlayer.loadVideoById({ videoId, startSeconds: seekTo });
-  } else if (ytReady) {
-    ytPlayer = new YT.Player('yt-player', {
-      height: '0', width: '0',   // hidden — audio only feel; we show title + controls
-      videoId,
-      playerVars: { autoplay: 1, controls: 0, start: Math.floor(seekTo), modestbranding: 1, rel: 0 },
-      events: { onReady: e => e.target.playVideo(), onStateChange: onYTState }
-    });
-  } else {
-    setTimeout(() => mpLoadPlayer(videoId, seekTo), 300);
+    try { ytPlayer.loadVideoById({ videoId, startSeconds: Math.floor(seekTo) }); } catch (_) {}
+    return;
   }
+  if (!ytReady) { setTimeout(() => mpLoadPlayer(videoId, seekTo), 400); return; }
+  // destroy old player div and recreate (avoids double-init issues)
+  wrap.innerHTML = '';
+  const div = document.createElement('div');
+  div.id = 'yt-inner';
+  wrap.appendChild(div);
+  ytPlayer = new YT.Player('yt-inner', {
+    height: '170', width: '100%',
+    videoId,
+    playerVars: {
+      autoplay: 1, controls: 1,
+      start: Math.floor(seekTo),
+      modestbranding: 1, rel: 0, iv_load_policy: 3
+    },
+    events: { onStateChange: onYTState }
+  });
 }
 
 function onYTState(e) {
@@ -1312,16 +1381,15 @@ function onYTState(e) {
 }
 
 window.mpTogglePlay = function () {
-  if (!ytPlayer) return;
-  const state = ytPlayer.getPlayerState();
-  if (state === YT.PlayerState.PLAYING) ytPlayer.pauseVideo();
+  if (!ytPlayer || typeof ytPlayer.getPlayerState !== 'function') return;
+  if (ytPlayer.getPlayerState() === YT.PlayerState.PLAYING) ytPlayer.pauseVideo();
   else ytPlayer.playVideo();
 };
 
 window.mpStop = async function () {
   if (!CCI) return;
   await set(ref(db, musicPath()), null);
-  if (ytPlayer) ytPlayer.stopVideo();
+  if (ytPlayer && typeof ytPlayer.stopVideo === 'function') ytPlayer.stopVideo();
   el('mp-player-wrap').classList.add('hidden');
   el('mp-now-title').textContent = '';
 };
@@ -1329,27 +1397,35 @@ window.mpStop = async function () {
 function startMusicSync(chatId) {
   if (musicUnsub) { musicUnsub(); musicUnsub = null; }
   const path = isGroup ? `groups/${chatId}/music` : `chats/${chatId}/music`;
+  let lastVid = null;
   musicUnsub = onValue(ref(db, path), snap => {
     const m = snap.val();
     if (!m) {
       el('mp-player-wrap').classList.add('hidden');
       el('mp-now-title').textContent = '';
-      if (ytPlayer) ytPlayer.stopVideo();
+      if (ytPlayer && typeof ytPlayer.stopVideo === 'function') ytPlayer.stopVideo();
+      lastVid = null;
       return;
     }
-    el('mp-now-title').textContent = m.title || '';
-    el('mp-player-wrap').classList.remove('hidden');
+    el('mp-now-title').textContent = '🎵 ' + (m.title || '');
     const elapsed = (Date.now() - m.seekedAt) / 1000;
-    const seekTo = (m.seekedTo || 0) + (m.playing ? elapsed : 0);
-    mpSyncing = true;
-    mpLoadPlayer(m.videoId, seekTo);
-    setTimeout(() => {
-      mpSyncing = false;
-      if (ytPlayer && typeof ytPlayer.getPlayerState === 'function') {
-        if (m.playing) ytPlayer.playVideo();
-        else ytPlayer.pauseVideo();
-      }
-    }, 800);
+    const seekTo  = (m.seekedTo || 0) + (m.playing ? elapsed : 0);
+
+    if (m.videoId !== lastVid) {
+      // new song — reload player
+      lastVid = m.videoId;
+      mpSyncing = true;
+      mpLoadPlayer(m.videoId, seekTo);
+      setTimeout(() => { mpSyncing = false; }, 1500);
+    } else if (!mpSyncing) {
+      // same song, sync play/pause
+      mpSyncing = true;
+      try {
+        if (m.playing) ytPlayer?.playVideo?.();
+        else ytPlayer?.pauseVideo?.();
+      } catch (_) {}
+      setTimeout(() => { mpSyncing = false; }, 600);
+    }
   });
 }
 

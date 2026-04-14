@@ -220,31 +220,76 @@
           <canvas id="draw-canvas" class="draw-overlay hidden"></canvas>
           <canvas id="draw-live"   class="draw-overlay draw-live-layer hidden"></canvas>
 
-          <!-- Compact floating draw toolbar -->
+          <!-- Floating draw toolbar -->
           <div class="draw-ftb hidden" id="draw-ftb">
-            <div class="draw-ftb-drag" id="draw-ftb-drag">🎨</div>
-            <div class="dco act" style="background:#ffffff" data-c="#ffffff" onclick="setDC(this)"></div>
-            <div class="dco" style="background:#ff4f6b" data-c="#ff4f6b" onclick="setDC(this)"></div>
-            <div class="dco" style="background:#43e97b" data-c="#43e97b" onclick="setDC(this)"></div>
-            <div class="dco" style="background:#6c63ff" data-c="#6c63ff" onclick="setDC(this)"></div>
-            <div class="dco" style="background:#ffd700" data-c="#ffd700" onclick="setDC(this)"></div>
-            <div class="dco" style="background:#ff9a00" data-c="#ff9a00" onclick="setDC(this)"></div>
-            <div class="dco" style="background:#00cfff" data-c="#00cfff" onclick="setDC(this)"></div>
-            <div class="dco" style="background:#ff69b4" data-c="#ff69b4" onclick="setDC(this)"></div>
-            <div class="draw-ftb-sep"></div>
-            <button class="dsb act" data-s="3"  onclick="setDS(this)" title="Thin">·</button>
-            <button class="dsb"     data-s="8"  onclick="setDS(this)" title="Medium">•</button>
-            <button class="dsb"     data-s="18" onclick="setDS(this)" title="Thick">⬤</button>
-            <button class="dsb erase-btn" data-es="28" onclick="setEraser(this)" title="Eraser S">⌫</button>
-            <button class="dsb erase-btn2" data-es="55" onclick="setEraserLg(this)" title="Eraser L">⌫⌫</button>
-            <div class="draw-ftb-sep"></div>
-            <button class="dshp act" data-sh="free"   onclick="setShape(this)" title="Freehand">✏️</button>
-            <button class="dshp"     data-sh="line"   onclick="setShape(this)" title="Line">╱</button>
-            <button class="dshp"     data-sh="rect"   onclick="setShape(this)" title="Rect">▭</button>
-            <button class="dshp"     data-sh="circle" onclick="setShape(this)" title="Circle">◯</button>
-            <div class="draw-ftb-sep"></div>
-            <button class="dsb" onclick="clearDraw()" title="Clear all" style="color:var(--red)">🗑</button>
-            <button class="dsb" onclick="toggleDraw()" title="Close draw" style="color:var(--text2)">✕</button>
+            <!-- Header / drag handle -->
+            <div class="draw-ftb-hdr" id="draw-ftb-drag">
+              <span>🎨 Draw</span>
+              <button class="draw-x-btn" onclick="toggleDraw()">✕</button>
+            </div>
+
+            <!-- Colour section -->
+            <div class="draw-section">
+              <div class="draw-sec-lbl">Colour</div>
+              <div class="draw-colors">
+                <div class="dco act" data-c="#ffffff" onclick="setDC(this)" style="background:#ffffff"></div>
+                <div class="dco" data-c="#ff4f6b" onclick="setDC(this)" style="background:#ff4f6b"></div>
+                <div class="dco" data-c="#43e97b" onclick="setDC(this)" style="background:#43e97b"></div>
+                <div class="dco" data-c="#6c63ff" onclick="setDC(this)" style="background:#6c63ff"></div>
+                <div class="dco" data-c="#ffd700" onclick="setDC(this)" style="background:#ffd700"></div>
+                <div class="dco" data-c="#ff9a00" onclick="setDC(this)" style="background:#ff9a00"></div>
+                <div class="dco" data-c="#00cfff" onclick="setDC(this)" style="background:#00cfff"></div>
+                <div class="dco" data-c="#ff69b4" onclick="setDC(this)" style="background:#ff69b4"></div>
+                <div class="dco dco-custom" id="dco-custom" onclick="toggleColorWheel()" title="Custom colour (colour wheel)"></div>
+              </div>
+              <!-- Colour wheel popup -->
+              <div class="draw-wheel-popup hidden" id="draw-wheel-popup">
+                <canvas id="draw-wheel-cv" width="170" height="170"></canvas>
+                <div class="draw-wheel-row">
+                  <span class="draw-wheel-lbl">Light</span>
+                  <input type="range" id="draw-l-slider" min="15" max="85" value="50" class="draw-l-slider" oninput="onDrawL(this.value)">
+                </div>
+                <div class="draw-wheel-row">
+                  <input type="text" id="draw-hex" maxlength="7" placeholder="#ffffff" class="draw-hex-input" oninput="onDrawHex(this.value)">
+                  <div id="draw-hex-prev" class="draw-hex-prev" style="background:#ffffff"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Brush section -->
+            <div class="draw-section">
+              <div class="draw-sec-lbl">Brush</div>
+              <div class="draw-row">
+                <button class="dsb act" data-s="2"  onclick="setDS(this)">S</button>
+                <button class="dsb"     data-s="6"  onclick="setDS(this)">M</button>
+                <button class="dsb"     data-s="14" onclick="setDS(this)">L</button>
+              </div>
+            </div>
+
+            <!-- Shape section -->
+            <div class="draw-section">
+              <div class="draw-sec-lbl">Shape</div>
+              <div class="draw-row">
+                <button class="dshp act" data-sh="free"   onclick="setShape(this)" title="Freehand">✏️</button>
+                <button class="dshp"     data-sh="line"   onclick="setShape(this)" title="Line">╱</button>
+                <button class="dshp"     data-sh="rect"   onclick="setShape(this)" title="Rectangle">▭</button>
+                <button class="dshp"     data-sh="circle" onclick="setShape(this)" title="Circle">◯</button>
+              </div>
+            </div>
+
+            <!-- Eraser section -->
+            <div class="draw-section">
+              <div class="draw-sec-lbl">Eraser</div>
+              <div class="draw-row">
+                <button class="dsb erase-btn" data-es="28" onclick="setEraser(this)">M</button>
+                <button class="dsb erase-btn" data-es="55" onclick="setEraserLg(this)">L</button>
+              </div>
+            </div>
+
+            <!-- Clear -->
+            <div class="draw-section draw-section-last">
+              <button class="draw-clear-btn" onclick="clearDraw()">🗑 Clear Canvas</button>
+            </div>
           </div>
         </div>
 

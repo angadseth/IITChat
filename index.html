@@ -230,51 +230,68 @@
               <button class="draw-x-btn" onclick="toggleDraw()">✕</button>
             </div>
 
-            <!-- Tool grid (2 cols × 4 rows) -->
+            <!-- Tool grid (2 cols × 4 rows) with labels -->
             <div class="draw-tools-grid">
 
               <button class="dtool act" data-tool="pencil" onclick="setTool(this)" title="Pencil">
                 <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2.5l3.5 3.5L6 17.5 2 18l.5-4L14 2.5z"/><line x1="11" y1="5" x2="15" y2="9"/></svg>
+                <span class="dtool-lbl">Pencil</span>
               </button>
 
               <button class="dtool" data-tool="spray" onclick="setTool(this)" title="Spray">
                 <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="10" width="7" height="8" rx="1.5" stroke-width="1.6"/><path d="M9 13.5h2.5M9 16h2.5"/><path d="M12 11V7.5a1 1 0 011-1h2a1 1 0 011 1V11"/><circle cx="17.5" cy="5" r="1" fill="currentColor" stroke="none"/><circle cx="15" cy="3" r="1" fill="currentColor" stroke="none"/><circle cx="18.5" cy="7.5" r="1" fill="currentColor" stroke="none"/></svg>
+                <span class="dtool-lbl">Spray</span>
               </button>
 
               <button class="dtool" data-tool="line" onclick="setTool(this)" title="Line">
                 <svg viewBox="0 0 20 20" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3.5" y1="16.5" x2="16.5" y2="3.5"/></svg>
+                <span class="dtool-lbl">Line</span>
               </button>
 
               <button class="dtool" data-tool="rect" onclick="setTool(this)" title="Rectangle">
                 <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><rect x="3" y="5" width="14" height="10" rx="1.5"/></svg>
+                <span class="dtool-lbl">Rect</span>
               </button>
 
-              <button class="dtool" data-tool="circle" onclick="setTool(this)" title="Circle">
+              <button class="dtool" data-tool="circle" onclick="setTool(this)" title="Circle / Ellipse">
                 <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><ellipse cx="10" cy="10" rx="7" ry="5.5"/></svg>
+                <span class="dtool-lbl">Circle</span>
               </button>
 
               <button class="dtool" data-tool="eraser" onclick="setTool(this)" title="Eraser">
                 <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 3.5l3 3-7.5 9.5H5l-2.5-2.5 7.5-9.5z"/><line x1="4" y1="16" x2="18" y2="16"/></svg>
+                <span class="dtool-lbl">Eraser</span>
               </button>
 
-              <button class="dtool" data-tool="eyedrop" onclick="setTool(this)" title="Colour Picker">
+              <button class="dtool" data-tool="eyedrop" onclick="setTool(this)" title="Pick colour from canvas">
                 <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12.5 3l4.5 4.5-8 8-3.5 1L4 13l1-3.5 7.5-6.5z"/><path d="M3 17l1.5-1.5"/><circle cx="3.5" cy="17.5" r="1.5" fill="currentColor" stroke="none"/></svg>
+                <span class="dtool-lbl">Pick</span>
               </button>
 
-              <button class="dtool" data-tool="fill" onclick="setTool(this)" title="Fill">
+              <button class="dtool" data-tool="fill" onclick="setTool(this)" title="Flood fill">
                 <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13l4-9 2 2-4 9H3z"/><path d="M7 4l3 3M3 13h7l-3-3"/><path d="M13 10s3 2.5 3 4.5a1.5 1.5 0 01-3 0c0-2 3-4.5 3-4.5z" fill="currentColor" stroke="none"/></svg>
+                <span class="dtool-lbl">Fill</span>
               </button>
 
             </div>
 
-            <!-- Sizes -->
+            <!-- Undo / Redo -->
+            <div class="draw-undoredo">
+              <button class="dur-btn" onclick="drawUndo()" title="Undo">
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h9a5 5 0 010 10H7"/><path d="M3 8l4-4M3 8l4 4"/></svg>
+                <span>Undo</span>
+              </button>
+              <button class="dur-btn" onclick="drawRedo()" title="Redo">
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 8H8a5 5 0 000 10h5"/><path d="M17 8l-4-4M17 8l-4 4"/></svg>
+                <span>Redo</span>
+              </button>
+            </div>
+
+            <!-- Size slider -->
             <div class="draw-sizes-row">
               <span class="draw-sz-lbl">Size</span>
-              <div class="draw-sizes">
-                <button class="dsz act" data-s="2"  onclick="setDS(this)"></button>
-                <button class="dsz"     data-s="6"  onclick="setDS(this)"></button>
-                <button class="dsz"     data-s="14" onclick="setDS(this)"></button>
-              </div>
+              <input type="range" id="draw-size-slider" min="1" max="10" value="2" class="draw-sz-slider" oninput="onDrawSize(this.value)">
+              <span class="draw-sz-val" id="draw-sz-val">2</span>
             </div>
 
             <!-- Colour palette -->
@@ -301,9 +318,9 @@
             <!-- Clear -->
             <button class="draw-clear-btn" onclick="clearDraw()">Clear Canvas</button>
 
-            <!-- Colour wheel popup -->
+            <!-- Colour wheel popup (opens to the left of toolbar) -->
             <div class="draw-wheel-popup hidden" id="draw-wheel-popup">
-              <canvas id="draw-wheel-cv" width="158" height="158"></canvas>
+              <canvas id="draw-wheel-cv" width="170" height="170"></canvas>
               <div class="draw-wheel-row">
                 <span class="draw-wheel-lbl">L</span>
                 <input type="range" id="draw-l-slider" min="15" max="85" value="50" class="draw-l-slider" oninput="onDrawL(this.value)">

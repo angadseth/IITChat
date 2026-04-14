@@ -5,15 +5,16 @@
 let _db, _ref, _set, _push, _onValue, _onChildAdded, _getState;
 
 // ── tool + draw state ──
-let drawTool      = 'pencil';   // pencil|spray|line|rect|circle|eraser|eyedrop|fill
-let drawPrevTool  = 'pencil';   // restore after eyedrop
+let drawTool      = 'pencil';
+let drawPrevTool  = 'pencil';
 let drawOpen      = false;
 let drawInited    = false;
 let drawCanvas    = null, drawCtx     = null;
 let drawLiveCv    = null, drawLiveCtx = null;
 let drawIsDrawing = false;
 let drawColor     = '#ffffff';
-let drawSize      = 2;
+let drawSize      = 2;           // actual px — set by slider
+let drawSliderVal = 2;           // 1-10 slider value
 let drawCurrPts   = [];
 let drawStartPt   = null;
 let drawSendTimer = null;
@@ -21,9 +22,16 @@ let drawUnsub     = null;
 let drawLiveUnsub = null;
 let drawActiveUnsub = null;
 
-// ── colour wheel state ──
+// ── undo / redo ──
+let drawHistory   = [];   // [{key, data}] all committed strokes
+let drawRedoStack = [];   // [{data}] undone strokes awaiting redo
+
+// ── colour wheel ──
 let drawHue = 0, drawSatW = 0, drawLighW = 50;
 let drawWheelInited = false, drawWheelOpen = false;
+
+// Slider value (1-10) → actual pixel size
+const SZ = [1, 2, 4, 6, 9, 12, 16, 22, 30, 40];
 
 const el = id => document.getElementById(id);
 
@@ -38,6 +46,9 @@ export function initDrawFeature(db, ref, set, push, onValue, onChildAdded, getSt
   window.setTool          = setTool;
   window.setDS            = setDS;
   window.setDC            = setDC;
+  window.onDrawSize       = onDrawSize;
+  window.drawUndo         = drawUndo;
+  window.drawRedo         = drawRedo;
   window.toggleColorWheel = toggleColorWheel;
   window.onDrawL          = onDrawL;
   window.onDrawHex        = onDrawHex;
@@ -47,7 +58,6 @@ export function onChatOpen() {
   if (drawOpen) startDrawSync();
 }
 
-// ── Firebase path ──
 function drawFBPath() {
   const { CCI, isGroup } = _getState();
   return (isGroup ? `groups/${CCI}` : `chats/${CCI}`) + '/drawing';
@@ -60,17 +70,13 @@ function _applyVis(show) {
   el('draw-ftb').classList.toggle('hidden', !show);
   el('draw-canvas').style.pointerEvents = show ? 'all' : 'none';
 }
-
 function _autoOpenDraw() {
-  drawOpen = true;
-  _applyVis(true);
+  drawOpen = true; _applyVis(true);
   if (!drawInited) initDraw();
   requestAnimationFrame(() => sizeDraw());
 }
-
 function toggleDraw() {
-  drawOpen = !drawOpen;
-  _applyVis(drawOpen);
+  drawOpen = !drawOpen; _applyVis(drawOpen);
   if (drawOpen) {
     if (!drawInited) initDraw();
     requestAnimationFrame(() => {
@@ -81,7 +87,7 @@ function toggleDraw() {
   }
 }
 
-// ── canvas init (once) ──
+// ── canvas init ──
 function initDraw() {
   drawCanvas  = el('draw-canvas');
   drawLiveCv  = el('draw-live');
@@ -89,7 +95,6 @@ function initDraw() {
   drawLiveCtx = drawLiveCv.getContext('2d');
   drawInited  = true;
 
-  // Drag (position:fixed → window bounds)
   const ftb = el('draw-ftb'), grip = el('draw-ftb-drag');
   let drag = null;
   grip.addEventListener('mousedown', e => {
@@ -105,7 +110,6 @@ function initDraw() {
   });
   document.addEventListener('mouseup', () => { drag = null; });
 
-  // Close wheel on outside click
   document.addEventListener('click', e => {
     if (!drawWheelOpen) return;
     if (!el('draw-ftb')?.contains(e.target)) {
@@ -114,7 +118,6 @@ function initDraw() {
     }
   });
 
-  // Resize: skip if mid-stroke to avoid clearing in-progress drawing
   new ResizeObserver(() => { if (drawOpen && !drawIsDrawing) sizeDraw(true); }).observe(el('ma-wrap'));
 
   const on = (t, ev, fn, o) => t.addEventListener(ev, fn, o);
@@ -134,9 +137,9 @@ function sizeDraw(redraw) {
   if (!w || !h) return;
   [drawCanvas, drawLiveCv].forEach(c => {
     c.width = w; c.height = h;
-    c.style.width  = w + 'px'; c.style.height = h + 'px';
-    c.style.top    = ma.offsetTop  + 'px';
-    c.style.left   = ma.offsetLeft + 'px';
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    c.style.top   = ma.offsetTop  + 'px';
+    c.style.left  = ma.offsetLeft + 'px';
   });
   const { CCI } = _getState();
   if (redraw && CCI && !drawIsDrawing) startDrawSync();
@@ -150,7 +153,6 @@ function ptOf(e) {
 
 // ── drawing events ──
 function onDS(pt) {
-  // — Eyedropper: sample pixel, revert to previous tool —
   if (drawTool === 'eyedrop') {
     const px = Math.max(0, Math.min(Math.round(pt.x * drawCanvas.width),  drawCanvas.width  - 1));
     const py = Math.max(0, Math.min(Math.round(pt.y * drawCanvas.height), drawCanvas.height - 1));
@@ -159,31 +161,28 @@ function onDS(pt) {
       drawColor = '#' + [d[0], d[1], d[2]].map(v => v.toString(16).padStart(2,'0')).join('');
       _updateColorUI(drawColor);
     }
-    _setToolByName(drawPrevTool);
-    return;
+    _setToolByName(drawPrevTool); return;
   }
-
-  // — Fill: flood fill at click point —
   if (drawTool === 'fill') {
     const px = Math.max(0, Math.min(Math.round(pt.x * drawCanvas.width),  drawCanvas.width  - 1));
     const py = Math.max(0, Math.min(Math.round(pt.y * drawCanvas.height), drawCanvas.height - 1));
     _floodFill(drawCtx, px, py, drawColor);
     const { CCI, CU } = _getState();
-    if (CCI) _push(_ref(_db, drawFBPath() + '/strokes'), {
-      c: drawColor, sh: 'fill', pts: [pt], by: CU.uid, ts: Date.now()
-    });
+    if (CCI) {
+      drawRedoStack = [];
+      _push(_ref(_db, drawFBPath() + '/strokes'), {
+        c: drawColor, sh: 'fill', pts: [pt], by: CU.uid, ts: Date.now()
+      });
+    }
     return;
   }
 
   drawIsDrawing = true; drawStartPt = pt; drawCurrPts = [pt];
-
   if (drawTool === 'pencil') drawSeg(drawCtx, pt, pt);
   if (drawTool === 'eraser') drawSeg(drawCtx, pt, pt);
   if (drawTool === 'spray')  _sprayAt(drawCtx, pt, 0);
-
   drawSendTimer = setInterval(pushLiveStroke, 55);
 
-  // Signal other user → they auto-open draw panel
   const { CCI, CU } = _getState();
   if (CCI) _set(_ref(_db, drawFBPath() + '/active'), { by: CU.uid, ts: Date.now() });
 }
@@ -197,7 +196,6 @@ function onDM(pt) {
   } else if (drawTool === 'spray') {
     _sprayAt(drawCtx, pt, drawCurrPts.length);
   } else {
-    // Shape preview on live layer
     drawLiveCtx.clearRect(0, 0, drawLiveCv.width, drawLiveCv.height);
     _drawShape(drawLiveCtx, drawStartPt, pt, drawColor, drawSize, drawTool);
   }
@@ -208,13 +206,13 @@ function onDE() {
   drawIsDrawing = false;
   clearInterval(drawSendTimer); drawSendTimer = null;
   const ep = drawCurrPts[drawCurrPts.length - 1] || drawStartPt;
-  const isShape = ['line', 'rect', 'circle'].includes(drawTool);
-  if (isShape && drawStartPt) {
+  if (['line','rect','circle'].includes(drawTool) && drawStartPt) {
     _drawShape(drawCtx, drawStartPt, ep, drawColor, drawSize, drawTool);
     drawLiveCtx.clearRect(0, 0, drawLiveCv.width, drawLiveCv.height);
   }
   const { CCI, CU } = _getState();
   if (!CCI || !drawCurrPts.length) return;
+  drawRedoStack = [];  // new stroke clears redo history
   _push(_ref(_db, drawFBPath() + '/strokes'), {
     c: drawColor, s: drawSize, e: drawTool === 'eraser',
     sh: drawTool, pts: drawCurrPts, sp: drawStartPt,
@@ -233,7 +231,24 @@ function pushLiveStroke() {
   });
 }
 
-// ── rendering helpers ──
+// ── undo / redo ──
+function drawUndo() {
+  const { CU } = _getState();
+  const mine = drawHistory.filter(h => h.data.by === CU?.uid);
+  if (!mine.length) return;
+  const last = mine[mine.length - 1];
+  drawRedoStack.push(last.data);
+  // Remove from Firebase — onValue listener will re-render
+  _set(_ref(_db, drawFBPath() + '/strokes/' + last.key), null);
+}
+
+function drawRedo() {
+  if (!drawRedoStack.length) return;
+  const stroke = drawRedoStack.pop();
+  _push(_ref(_db, drawFBPath() + '/strokes'), stroke);
+}
+
+// ── rendering ──
 function drawSeg(ctx, from, to) {
   const W = ctx.canvas.width, H = ctx.canvas.height;
   const isErase = drawTool === 'eraser';
@@ -251,127 +266,118 @@ function drawSeg(ctx, from, to) {
 
 function _drawShape(ctx, from, to, color, size, shape) {
   const W = ctx.canvas.width, H = ctx.canvas.height;
-  const x1 = from.x*W, y1 = from.y*H, x2 = to.x*W, y2 = to.y*H;
+  const x1=from.x*W, y1=from.y*H, x2=to.x*W, y2=to.y*H;
   ctx.strokeStyle = color; ctx.lineWidth = size || 3;
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   ctx.beginPath();
-  if (shape === 'line')   { ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke(); }
-  else if (shape === 'rect')   { ctx.strokeRect(x1,y1,x2-x1,y2-y1); }
-  else if (shape === 'circle') {
+  if (shape==='line') { ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke(); }
+  else if (shape==='rect') { ctx.strokeRect(x1,y1,x2-x1,y2-y1); }
+  else if (shape==='circle') {
     const cx=(x1+x2)/2, cy=(y1+y2)/2;
     ctx.ellipse(cx,cy,Math.max(Math.abs(x2-x1)/2,1),Math.max(Math.abs(y2-y1)/2,1),0,0,Math.PI*2);
     ctx.stroke();
   }
 }
 
-// Spray: deterministic based on point index so both sides look similar
 function _sprayAt(ctx, pt, seed) {
   const W = ctx.canvas.width, H = ctx.canvas.height;
-  const cx = pt.x*W, cy = pt.y*H;
-  const radius = Math.max(10, drawSize * 5);
-  const count  = Math.max(8, drawSize * 4);
+  const cx=pt.x*W, cy=pt.y*H;
+  const radius = Math.max(10, drawSize * 4);
+  const count  = Math.max(8,  drawSize * 3);
   ctx.fillStyle = drawColor;
   for (let i = 0; i < count; i++) {
-    const a = _pr(seed * 100 + i)       * Math.PI * 2;
-    const r = _pr(seed * 100 + i + 50)  * radius;
+    const a = _pr(seed*100+i)    * Math.PI * 2;
+    const r = _pr(seed*100+i+50) * radius;
     ctx.beginPath();
     ctx.arc(cx + Math.cos(a)*r, cy + Math.sin(a)*r, _pr(seed+i+99)*1.2+0.3, 0, Math.PI*2);
     ctx.fill();
   }
 }
-// Pseudo-random (deterministic, no seed needed for live; used for replay)
-function _pr(n) { const x = Math.sin(n + 1) * 43758.5; return x - Math.floor(x); }
+function _pr(n) { const x = Math.sin(n+1)*43758.5; return x - Math.floor(x); }
 
-// Flood fill (scanline)
 function _floodFill(ctx, sx, sy, hexColor) {
   const W = ctx.canvas.width, H = ctx.canvas.height;
   if (sx < 0 || sx >= W || sy < 0 || sy >= H) return;
-  const img  = ctx.getImageData(0, 0, W, H);
-  const data = img.data;
-  const si   = (sy * W + sx) * 4;
-  const [tr, tg, tb, ta] = [data[si], data[si+1], data[si+2], data[si+3]];
-  const fr = parseInt(hexColor.slice(1,3),16);
-  const fg = parseInt(hexColor.slice(3,5),16);
-  const fb = parseInt(hexColor.slice(5,7),16);
-  if (tr===fr && tg===fg && tb===fb && ta===255) return;
-  const match = i => data[i]===tr && data[i+1]===tg && data[i+2]===tb && data[i+3]===ta;
-  const stack = [sx + sy * W];
-  const visited = new Uint8Array(W * H);
+  const img = ctx.getImageData(0, 0, W, H), data = img.data;
+  const si = (sy*W+sx)*4;
+  const [tr,tg,tb,ta] = [data[si],data[si+1],data[si+2],data[si+3]];
+  const fr=parseInt(hexColor.slice(1,3),16), fg=parseInt(hexColor.slice(3,5),16), fb=parseInt(hexColor.slice(5,7),16);
+  if (tr===fr&&tg===fg&&tb===fb&&ta===255) return;
+  const match = i => data[i]===tr&&data[i+1]===tg&&data[i+2]===tb&&data[i+3]===ta;
+  const stack = [sx+sy*W], visited = new Uint8Array(W*H);
   while (stack.length) {
     const pos = stack.pop();
-    if (visited[pos]) continue;
-    visited[pos] = 1;
-    const idx = pos * 4;
+    if (visited[pos]) continue; visited[pos]=1;
+    const idx = pos*4;
     if (!match(idx)) continue;
     data[idx]=fr; data[idx+1]=fg; data[idx+2]=fb; data[idx+3]=255;
-    const x = pos % W, y = (pos/W)|0;
-    if (x > 0)     stack.push(pos - 1);
-    if (x < W - 1) stack.push(pos + 1);
-    if (y > 0)     stack.push(pos - W);
-    if (y < H - 1) stack.push(pos + W);
+    const x=pos%W, y=(pos/W)|0;
+    if (x>0)     stack.push(pos-1);
+    if (x<W-1)   stack.push(pos+1);
+    if (y>0)     stack.push(pos-W);
+    if (y<H-1)   stack.push(pos+W);
   }
   ctx.putImageData(img, 0, 0);
 }
 
 function renderStroke(ctx, stroke) {
   const W = ctx.canvas.width, H = ctx.canvas.height;
-  const pts = stroke.pts || [];
+  const pts = stroke.pts || [], sh = stroke.sh || 'free';
   if (!pts.length) return;
-  const sh = stroke.sh || 'free';
 
   if (sh === 'fill') {
-    _floodFill(ctx, Math.round(pts[0].x*W), Math.round(pts[0].y*H), stroke.c || '#000');
-    return;
+    _floodFill(ctx, Math.round(pts[0].x*W), Math.round(pts[0].y*H), stroke.c||'#000'); return;
   }
   if (sh === 'spray') {
-    ctx.fillStyle = stroke.c || '#fff';
-    const radius = Math.max(10, (stroke.s||3) * 5);
-    const count  = Math.max(8,  (stroke.s||3) * 4);
-    pts.forEach((pt, pi) => {
-      for (let i = 0; i < count; i++) {
-        const a = _pr(pi*100+i)    * Math.PI * 2;
-        const r = _pr(pi*100+i+50) * radius;
-        ctx.beginPath();
-        ctx.arc(pt.x*W + Math.cos(a)*r, pt.y*H + Math.sin(a)*r, _pr(pi+i+99)*1.2+0.3, 0, Math.PI*2);
-        ctx.fill();
+    ctx.fillStyle = stroke.c||'#fff';
+    const radius = Math.max(10,(stroke.s||3)*4), count = Math.max(8,(stroke.s||3)*3);
+    pts.forEach((pt,pi) => {
+      for (let i=0;i<count;i++) {
+        const a=_pr(pi*100+i)*Math.PI*2, r=_pr(pi*100+i+50)*radius;
+        ctx.beginPath(); ctx.arc(pt.x*W+Math.cos(a)*r, pt.y*H+Math.sin(a)*r, _pr(pi+i+99)*1.2+0.3, 0, Math.PI*2); ctx.fill();
       }
-    });
-    return;
+    }); return;
   }
 
   ctx.globalCompositeOperation = stroke.e ? 'destination-out' : 'source-over';
   ctx.strokeStyle = stroke.e ? 'rgba(0,0,0,1)' : stroke.c;
   ctx.fillStyle   = stroke.e ? 'rgba(0,0,0,1)' : stroke.c;
-  ctx.lineWidth = stroke.s || 3; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.lineWidth = stroke.s||3; ctx.lineCap='round'; ctx.lineJoin='round';
 
-  if (sh === 'free' || sh === 'pencil' || sh === 'eraser' || stroke.e) {
-    if (pts.length === 1) {
-      ctx.beginPath(); ctx.arc(pts[0].x*W, pts[0].y*H, (stroke.s||3)/2, 0, Math.PI*2); ctx.fill();
+  if (['free','pencil','eraser'].includes(sh) || stroke.e) {
+    if (pts.length===1) {
+      ctx.beginPath(); ctx.arc(pts[0].x*W,pts[0].y*H,(stroke.s||3)/2,0,Math.PI*2); ctx.fill();
     } else {
-      ctx.beginPath(); ctx.moveTo(pts[0].x*W, pts[0].y*H);
-      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x*W, pts[i].y*H);
+      ctx.beginPath(); ctx.moveTo(pts[0].x*W,pts[0].y*H);
+      for (let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x*W,pts[i].y*H);
       ctx.stroke();
     }
   } else {
-    const sp = stroke.sp || pts[0], ep = pts[pts.length-1];
-    _drawShape(ctx, sp, ep, stroke.c, stroke.s, sh);
+    _drawShape(ctx, stroke.sp||pts[0], pts[pts.length-1], stroke.c, stroke.s, sh);
   }
   ctx.globalCompositeOperation = 'source-over';
 }
 
 // ── Firebase sync ──
+// Uses onValue for strokes so undo/redo (deletions) propagate to both users
 export function startDrawSync() {
   if (drawUnsub)       { drawUnsub();       drawUnsub = null; }
   if (drawLiveUnsub)   { drawLiveUnsub();   drawLiveUnsub = null; }
   if (drawActiveUnsub) { drawActiveUnsub(); drawActiveUnsub = null; }
   if (!drawCanvas) return;
   sizeDraw();
-  drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
   drawLiveCtx.clearRect(0, 0, drawLiveCv.width, drawLiveCv.height);
+  drawHistory = [];
 
-  drawUnsub = _onChildAdded(_ref(_db, drawFBPath() + '/strokes'), snap => {
-    const s = snap.val();
-    if (s && drawCtx) renderStroke(drawCtx, s);
+  // onValue re-renders entire canvas whenever any stroke is added/removed (undo/redo)
+  drawUnsub = _onValue(_ref(_db, drawFBPath() + '/strokes'), snap => {
+    const raw = snap.val() || {};
+    drawHistory = Object.entries(raw)
+      .map(([key, data]) => ({ key, data }))
+      .sort((a, b) => (a.data.ts||0) - (b.data.ts||0));
+    if (drawIsDrawing) return; // don't clear mid-stroke
+    drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+    drawHistory.forEach(h => renderStroke(drawCtx, h.data));
   });
 
   const { CU } = _getState();
@@ -395,6 +401,7 @@ export function startDrawSync() {
 async function clearDraw() {
   const { CCI } = _getState();
   if (!CCI) return;
+  drawHistory = []; drawRedoStack = [];
   await _set(_ref(_db, drawFBPath()), null);
   if (drawCtx)     drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
   if (drawLiveCtx) drawLiveCtx.clearRect(0, 0, drawLiveCv.width, drawLiveCv.height);
@@ -408,25 +415,22 @@ function setTool(btn) {
   const t = btn.dataset.tool;
   if (t !== 'eyedrop') drawPrevTool = t;
   drawTool = t;
-  if (drawCanvas) {
-    drawCanvas.style.cursor = (t === 'eraser') ? 'cell' : 'crosshair';
-  }
+  if (drawCanvas) drawCanvas.style.cursor = t === 'eraser' ? 'cell' : 'crosshair';
 }
-
 function _setToolByName(name) {
   drawTool = name;
-  document.querySelectorAll('.dtool').forEach(b => {
-    b.classList.toggle('act', b.dataset.tool === name);
-  });
-  if (drawCanvas) drawCanvas.style.cursor = (name === 'eraser') ? 'cell' : 'crosshair';
+  document.querySelectorAll('.dtool').forEach(b => b.classList.toggle('act', b.dataset.tool === name));
+  if (drawCanvas) drawCanvas.style.cursor = name === 'eraser' ? 'cell' : 'crosshair';
 }
 
-// ── toolbar: size ──
-function setDS(btn) {
-  document.querySelectorAll('.dsz').forEach(b => b.classList.remove('act'));
-  btn.classList.add('act');
-  drawSize = parseInt(btn.dataset.s);
+// ── toolbar: size slider ──
+function onDrawSize(val) {
+  drawSliderVal = parseInt(val);
+  drawSize = SZ[drawSliderVal - 1] || 2;
+  const v = el('draw-sz-val');
+  if (v) v.textContent = drawSliderVal;
 }
+function setDS() {} // legacy no-op (slider replaces dot buttons)
 
 // ── toolbar: colour ──
 function setDC(el_) {
@@ -436,16 +440,12 @@ function setDC(el_) {
   _updateColorUI(drawColor);
   _closeWheel();
 }
-
 function _updateColorUI(hex) {
-  const cc = el('draw-cur-color');
-  const ch = el('draw-cur-hex');
+  const cc=el('draw-cur-color'), ch=el('draw-cur-hex');
   if (cc) cc.style.background = hex;
   if (ch) ch.textContent = hex;
-  const hp = el('draw-hex-prev');
-  if (hp) hp.style.background = hex;
-  const hi = el('draw-hex');
-  if (hi) hi.value = hex;
+  const hp=el('draw-hex-prev'); if (hp) hp.style.background = hex;
+  const hi=el('draw-hex');      if (hi) hi.value = hex;
 }
 
 // ── colour wheel ──
@@ -453,80 +453,63 @@ function _closeWheel() {
   drawWheelOpen = false;
   el('draw-wheel-popup')?.classList.add('hidden');
 }
-
 function toggleColorWheel() {
   drawWheelOpen = !drawWheelOpen;
   el('draw-wheel-popup').classList.toggle('hidden', !drawWheelOpen);
   if (drawWheelOpen && !drawWheelInited) _initColorWheel();
 }
-
 function _initColorWheel() {
   drawWheelInited = true;
   _renderColorWheel(el('draw-wheel-cv'));
   el('draw-wheel-cv').addEventListener('click', e => {
-    const cv = el('draw-wheel-cv');
-    const r  = cv.getBoundingClientRect();
-    const x  = e.clientX - r.left - r.width/2;
-    const y  = e.clientY - r.top  - r.height/2;
-    const dist = Math.sqrt(x*x + y*y);
-    if (dist > r.width/2) return;
+    const cv=el('draw-wheel-cv'), r=cv.getBoundingClientRect();
+    const x=e.clientX-r.left-r.width/2, y=e.clientY-r.top-r.height/2;
+    const dist=Math.sqrt(x*x+y*y);
+    if (dist>r.width/2) return;
     drawHue  = ((Math.atan2(y,x)*180/Math.PI)+360)%360;
-    drawSatW = Math.min(dist/(r.width/2)*100, 100);
+    drawSatW = Math.min(dist/(r.width/2)*100,100);
     _applyWheelColor();
   });
   _updateColorUI(drawColor);
 }
-
 function _renderColorWheel(cv) {
-  const ctx = cv.getContext('2d');
-  const sz = cv.width, cx = sz/2, cy = sz/2, r = sz/2 - 1;
-  const img = ctx.createImageData(sz, sz);
-  for (let py = 0; py < sz; py++) {
-    for (let px = 0; px < sz; px++) {
-      const dx = px-cx, dy = py-cy, d = Math.sqrt(dx*dx+dy*dy);
-      if (d > r) continue;
-      const h = ((Math.atan2(dy,dx)*180/Math.PI)+360)%360;
-      const [R,G,B] = _hsl(h/360, d/r, 0.5);
-      const i = (py*sz+px)*4;
-      img.data[i]=R; img.data[i+1]=G; img.data[i+2]=B; img.data[i+3]=255;
-    }
+  const ctx=cv.getContext('2d'), sz=cv.width, cx=sz/2, cy=sz/2, r=sz/2-1;
+  const img=ctx.createImageData(sz,sz);
+  for (let py=0;py<sz;py++) for (let px=0;px<sz;px++) {
+    const dx=px-cx, dy=py-cy, d=Math.sqrt(dx*dx+dy*dy);
+    if (d>r) continue;
+    const h=((Math.atan2(dy,dx)*180/Math.PI)+360)%360;
+    const [R,G,B]=_hsl(h/360,d/r,0.5);
+    const i=(py*sz+px)*4;
+    img.data[i]=R; img.data[i+1]=G; img.data[i+2]=B; img.data[i+3]=255;
   }
-  ctx.putImageData(img, 0, 0);
-  // Center white dot
-  ctx.beginPath(); ctx.arc(cx, cy, 5, 0, Math.PI*2);
-  ctx.fillStyle = 'rgba(255,255,255,0.45)'; ctx.fill();
+  ctx.putImageData(img,0,0);
+  ctx.beginPath(); ctx.arc(cx,cy,5,0,Math.PI*2);
+  ctx.fillStyle='rgba(255,255,255,0.4)'; ctx.fill();
 }
-
-function _hsl(h, s, l) {
-  const k = n => (n + h*12) % 12, a = s * Math.min(l, 1-l);
-  const f = n => l - a * Math.max(-1, Math.min(k(n)-3, Math.min(9-k(n), 1)));
-  return [Math.round(f(0)*255), Math.round(f(8)*255), Math.round(f(4)*255)];
+function _hsl(h,s,l) {
+  const k=n=>(n+h*12)%12, a=s*Math.min(l,1-l);
+  const f=n=>l-a*Math.max(-1,Math.min(k(n)-3,Math.min(9-k(n),1)));
+  return[Math.round(f(0)*255),Math.round(f(8)*255),Math.round(f(4)*255)];
 }
-function _hslHex(h, s, l) {
-  const [r,g,b] = _hsl(h/360, s/100, l/100);
-  return '#' + [r,g,b].map(v => v.toString(16).padStart(2,'0')).join('');
+function _hslHex(h,s,l) {
+  const[r,g,b]=_hsl(h/360,s/100,l/100);
+  return'#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join('');
 }
-
 function _applyWheelColor() {
-  drawColor = _hslHex(drawHue, drawSatW, drawLighW);
+  drawColor=_hslHex(drawHue,drawSatW,drawLighW);
   _updateColorUI(drawColor);
-  document.querySelectorAll('.dco').forEach(d => d.classList.remove('act'));
+  document.querySelectorAll('.dco').forEach(d=>d.classList.remove('act'));
   el('dco-custom')?.classList.add('act');
 }
-
 function onDrawL(val) {
-  drawLighW = parseInt(val);
-  if (drawSatW > 0 || drawHue > 0) _applyWheelColor();
+  drawLighW=parseInt(val);
+  if (drawSatW>0||drawHue>0) _applyWheelColor();
 }
-
 function onDrawHex(val) {
-  const clean = val.trim();
-  if (!/^#[0-9a-fA-F]{6}$/.test(clean)) {
-    if (el('draw-hex-prev')) el('draw-hex-prev').style.background = 'rgba(255,255,255,0.08)';
-    return;
-  }
-  drawColor = clean;
-  _updateColorUI(clean);
-  document.querySelectorAll('.dco').forEach(d => d.classList.remove('act'));
+  const clean=val.trim();
+  if (!/^#[0-9a-fA-F]{6}$/.test(clean)) { if(el('draw-hex-prev')) el('draw-hex-prev').style.background='rgba(255,255,255,.08)'; return; }
+  drawColor=clean; _updateColorUI(clean);
+  document.querySelectorAll('.dco').forEach(d=>d.classList.remove('act'));
   el('dco-custom')?.classList.add('act');
 }

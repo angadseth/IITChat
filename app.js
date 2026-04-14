@@ -102,10 +102,15 @@ window.doLogin = async () => {
   const p = el('lp').value;
   setAErr('');
   if (!e || !p) { setAErr('Fill all fields'); return; }
+  const btn = document.querySelector('#lf .btnp');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Signing in…';
   try {
     await signInWithEmailAndPassword(auth, e, p);
   } catch (err) {
     setAErr(fmtErr(err.code));
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa fa-sign-in-alt"></i> Sign In';
   }
 };
 
@@ -149,50 +154,41 @@ function fmtErr(code) {
 function setAErr(m) { el('aerr').textContent = m; }
 
 // ── auth state listener ──
-onAuthStateChanged(auth, async u => {
+onAuthStateChanged(auth, u => {
   if (u) {
     CU = u;
-    const uRef = ref(db, `users/${u.uid}`);
-    await update(uRef, { online: true, lastSeen: Date.now() });
 
-    // Helper — go online + re-register onDisconnect
-    async function goOnline() {
-      await update(uRef, { online: true, lastSeen: Date.now() });
-      await onDisconnect(uRef).update({ online: false, lastSeen: serverTimestamp() });
+    // Show app immediately — don't block on DB
+    el('auth-screen').style.display = 'none';
+    el('app').style.display         = 'flex';
+    applyTheme(localStorage.getItem('iitchat-theme') || 'dark');
+
+    const uRef = ref(db, `users/${u.uid}`);
+
+    function goOnline() {
+      update(uRef, { online: true, lastSeen: Date.now() });
+      onDisconnect(uRef).update({ online: false, lastSeen: serverTimestamp() });
     }
-    async function goOffline() {
-      await update(uRef, { online: false, lastSeen: Date.now() });
+    function goOffline() {
+      update(uRef, { online: false, lastSeen: Date.now() });
     }
 
     goOnline();
 
-    // Tab switch / minimize
     document.addEventListener('visibilitychange', () => {
       document.hidden ? goOffline() : goOnline();
     });
+    window.addEventListener('beforeunload', () => { goOffline(); });
 
-    // Page close / refresh
-    window.addEventListener('beforeunload', () => {
-      navigator.sendBeacon &&
-        navigator.sendBeacon('/null'); // trigger flush
-      goOffline();
+    // Load profile in background — doesn't block app open
+    get(ref(db, `users/${u.uid}`)).then(snap => {
+      const pr = snap.val() || {};
+      el('myav').innerHTML    = `${pr.avatar || '😎'}<div class="sd"></div>`;
+      el('spav').textContent  = pr.avatar || '😎';
+      el('spnm').textContent  = pr.name   || u.displayName || 'You';
+      el('spem').textContent  = u.email;
     });
 
-    const snap = await get(ref(db, `users/${u.uid}`));
-    const pr   = snap.val() || {};
-
-    // fill sidebar avatar
-    el('myav').innerHTML = `${pr.avatar || '😎'}<div class="sd"></div>`;
-
-    // fill settings panel
-    el('spav').textContent = pr.avatar || '😎';
-    el('spnm').textContent = pr.name   || u.displayName || 'You';
-    el('spem').textContent = u.email;
-
-    el('auth-screen').style.display = 'none';
-    el('app').style.display         = 'flex';
-
-    applyTheme(localStorage.getItem('iitchat-theme') || 'dark');
     loadContacts();
     loadGroups();
     autoClean();

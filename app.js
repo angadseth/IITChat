@@ -6,6 +6,7 @@
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { initDrawFeature, onChatOpen as drawChatOpen } from './features/draw.js';
+import { initMsgMenu } from './features/msgMenu.js';
 import {
   getAuth,
   createUserWithEmailAndPassword,
@@ -49,6 +50,8 @@ const THREE_DAYS = 3 * 24 * 60 * 60 * 1000;   // ms
 
 // ── feature: draw ──
 initDrawFeature(db, ref, set, push, onValue, onChildAdded, () => ({ CU, CCI, isGroup }));
+// ── feature: message menu ──
+initMsgMenu(() => ({ CU, CCT }), () => el('msgi')?.focus());
 
 // ── state ──
 let CU       = null;   // current user
@@ -548,30 +551,7 @@ function mkReacts(msg) {
   ).join('');
 }
 
-// ── REACTIONS ──
-const REACTS = ['❤️','😂','😮','😢','👍','🔥','🎉','😍','💀','🤣'];
-
-window.showRP = (e, bub, mid, isMe) => {
-  e.stopPropagation();
-  document.querySelectorAll('.rpk').forEach(p => p.remove());
-
-  // find msg data from current rendered messages
-  const msgRow = bub.closest('.mr');
-  const msgText = msgRow?.querySelector('.bub')?.innerText?.trim() || '';
-  const senderName = isMe ? (CU.displayName || 'You') : (CCT?.name || '');
-
-  const picker = document.createElement('div');
-  picker.className = 'rpk';
-  let html = `<span class="rpk-reply" title="Reply" onclick="setReply('${mid}','${escJs(msgText)}','${escJs(senderName)}');this.closest('.rpk').remove()">↩️</span>`;
-  html += `<span class="rpk-reply" title="Copy" onclick="copyMsg('${mid}');this.closest('.rpk').remove()">📋</span>`;
-  html += REACTS.map(r =>
-    `<span onclick="addRct('${mid}','${r}');this.closest('.rpk').remove()">${r}</span>`
-  ).join('');
-  if (isMe) html += `<span class="rpk-del" title="Delete" onclick="delMsg('${mid}');this.closest('.rpk').remove()">🗑️</span>`;
-  picker.innerHTML = html;
-  bub.appendChild(picker);
-  setTimeout(() => document.addEventListener('click', () => picker.remove(), { once: true }), 50);
-};
+// ── REACTIONS ── (showRP is now in features/msgMenu.js)
 
 window.setReply = (id, text, senderName) => {
   replyTo = { id, text, senderName };
@@ -622,12 +602,14 @@ window.closeLB = e => { if (e.target === el('lb')) el('lb').classList.add('hidde
 
 window.addRct = async (mid, em) => {
   await update(ref(db, `chats/${CCI}/messages/${mid}/reactions`), { [CU.uid]: em });
+  setTimeout(() => el('msgi')?.focus(), 80);
 };
 window.togRct = async (mid, em) => {
   const r    = ref(db, `chats/${CCI}/messages/${mid}/reactions/${CU.uid}`);
   const snap = await get(r);
   if (snap.val() === em) await remove(r);
   else await update(ref(db, `chats/${CCI}/messages/${mid}/reactions`), { [CU.uid]: em });
+  setTimeout(() => el('msgi')?.focus(), 80);
 };
 
 window.clearChat = async () => {

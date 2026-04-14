@@ -4,7 +4,9 @@
 
 let _db, _ref, _set, _push, _onValue, _onChildAdded, _getState;
 
-// ── core state ──
+// ── tool + draw state ──
+let drawTool      = 'pencil';   // pencil|spray|line|rect|circle|eraser|eyedrop|fill
+let drawPrevTool  = 'pencil';   // restore after eyedrop
 let drawOpen      = false;
 let drawInited    = false;
 let drawCanvas    = null, drawCtx     = null;
@@ -12,8 +14,6 @@ let drawLiveCv    = null, drawLiveCtx = null;
 let drawIsDrawing = false;
 let drawColor     = '#ffffff';
 let drawSize      = 2;
-let drawIsEraser  = false;
-let drawShape     = 'free';
 let drawCurrPts   = [];
 let drawStartPt   = null;
 let drawSendTimer = null;
@@ -22,15 +22,12 @@ let drawLiveUnsub = null;
 let drawActiveUnsub = null;
 
 // ── colour wheel state ──
-let drawHue       = 0;
-let drawSatW      = 0;
-let drawLighW     = 50;
-let drawWheelInited = false;
-let drawWheelOpen   = false;
+let drawHue = 0, drawSatW = 0, drawLighW = 50;
+let drawWheelInited = false, drawWheelOpen = false;
 
 const el = id => document.getElementById(id);
 
-// ── init (called once from app.js) ──
+// ── init ──
 export function initDrawFeature(db, ref, set, push, onValue, onChildAdded, getState) {
   _db = db; _ref = ref; _set = set; _push = push;
   _onValue = onValue; _onChildAdded = onChildAdded;
@@ -38,17 +35,14 @@ export function initDrawFeature(db, ref, set, push, onValue, onChildAdded, getSt
 
   window.toggleDraw       = toggleDraw;
   window.clearDraw        = clearDraw;
-  window.setDC            = setDC;
+  window.setTool          = setTool;
   window.setDS            = setDS;
-  window.setEraser        = setEraser;
-  window.setEraserLg      = setEraserLg;
-  window.setShape         = setShape;
+  window.setDC            = setDC;
   window.toggleColorWheel = toggleColorWheel;
   window.onDrawL          = onDrawL;
   window.onDrawHex        = onDrawHex;
 }
 
-// Called from app.js whenever a new chat is opened
 export function onChatOpen() {
   if (drawOpen) startDrawSync();
 }
@@ -59,26 +53,24 @@ function drawFBPath() {
   return (isGroup ? `groups/${CCI}` : `chats/${CCI}`) + '/drawing';
 }
 
-// ── show/hide draw UI ──
-function _applyDrawVisibility(show) {
+// ── visibility ──
+function _applyVis(show) {
   el('draw-canvas').classList.toggle('hidden', !show);
   el('draw-live').classList.toggle('hidden', !show);
   el('draw-ftb').classList.toggle('hidden', !show);
   el('draw-canvas').style.pointerEvents = show ? 'all' : 'none';
 }
 
-// Auto-open for receiver when other user starts drawing
 function _autoOpenDraw() {
   drawOpen = true;
-  _applyDrawVisibility(true);
+  _applyVis(true);
   if (!drawInited) initDraw();
   requestAnimationFrame(() => sizeDraw());
 }
 
-// ── toggle draw (user button) ──
 function toggleDraw() {
   drawOpen = !drawOpen;
-  _applyDrawVisibility(drawOpen);
+  _applyVis(drawOpen);
   if (drawOpen) {
     if (!drawInited) initDraw();
     requestAnimationFrame(() => {
@@ -89,7 +81,7 @@ function toggleDraw() {
   }
 }
 
-// ── init canvas + events (once) ──
+// ── canvas init (once) ──
 function initDraw() {
   drawCanvas  = el('draw-canvas');
   drawLiveCv  = el('draw-live');
@@ -97,9 +89,8 @@ function initDraw() {
   drawLiveCtx = drawLiveCv.getContext('2d');
   drawInited  = true;
 
-  // Drag toolbar — position:fixed so clamp to window bounds
-  const ftb  = el('draw-ftb');
-  const grip = el('draw-ftb-drag');
+  // Drag (position:fixed → window bounds)
+  const ftb = el('draw-ftb'), grip = el('draw-ftb-drag');
   let drag = null;
   grip.addEventListener('mousedown', e => {
     const r = ftb.getBoundingClientRect();
@@ -114,17 +105,16 @@ function initDraw() {
   });
   document.addEventListener('mouseup', () => { drag = null; });
 
-  // Close colour wheel when clicking outside the toolbar
+  // Close wheel on outside click
   document.addEventListener('click', e => {
     if (!drawWheelOpen) return;
-    const ftbEl   = el('draw-ftb');
-    if (ftbEl && !ftbEl.contains(e.target)) {
+    if (!el('draw-ftb')?.contains(e.target)) {
       drawWheelOpen = false;
       el('draw-wheel-popup')?.classList.add('hidden');
     }
   });
 
-  // Re-fit canvases on resize — skip if mid-stroke to avoid clearing live drawing
+  // Resize: skip if mid-stroke to avoid clearing in-progress drawing
   new ResizeObserver(() => { if (drawOpen && !drawIsDrawing) sizeDraw(true); }).observe(el('ma-wrap'));
 
   const on = (t, ev, fn, o) => t.addEventListener(ev, fn, o);
@@ -160,21 +150,56 @@ function ptOf(e) {
 
 // ── drawing events ──
 function onDS(pt) {
+  // — Eyedropper: sample pixel, revert to previous tool —
+  if (drawTool === 'eyedrop') {
+    const px = Math.max(0, Math.min(Math.round(pt.x * drawCanvas.width),  drawCanvas.width  - 1));
+    const py = Math.max(0, Math.min(Math.round(pt.y * drawCanvas.height), drawCanvas.height - 1));
+    const d  = drawCtx.getImageData(px, py, 1, 1).data;
+    if (d[3] > 20) {
+      drawColor = '#' + [d[0], d[1], d[2]].map(v => v.toString(16).padStart(2,'0')).join('');
+      _updateColorUI(drawColor);
+    }
+    _setToolByName(drawPrevTool);
+    return;
+  }
+
+  // — Fill: flood fill at click point —
+  if (drawTool === 'fill') {
+    const px = Math.max(0, Math.min(Math.round(pt.x * drawCanvas.width),  drawCanvas.width  - 1));
+    const py = Math.max(0, Math.min(Math.round(pt.y * drawCanvas.height), drawCanvas.height - 1));
+    _floodFill(drawCtx, px, py, drawColor);
+    const { CCI, CU } = _getState();
+    if (CCI) _push(_ref(_db, drawFBPath() + '/strokes'), {
+      c: drawColor, sh: 'fill', pts: [pt], by: CU.uid, ts: Date.now()
+    });
+    return;
+  }
+
   drawIsDrawing = true; drawStartPt = pt; drawCurrPts = [pt];
-  if (drawShape === 'free' || drawIsEraser) drawSeg(drawCtx, pt, pt);
+
+  if (drawTool === 'pencil') drawSeg(drawCtx, pt, pt);
+  if (drawTool === 'eraser') drawSeg(drawCtx, pt, pt);
+  if (drawTool === 'spray')  _sprayAt(drawCtx, pt, 0);
+
   drawSendTimer = setInterval(pushLiveStroke, 55);
-  // Notify other user that drawing is active → they auto-open
+
+  // Signal other user → they auto-open draw panel
   const { CCI, CU } = _getState();
   if (CCI) _set(_ref(_db, drawFBPath() + '/active'), { by: CU.uid, ts: Date.now() });
 }
 
 function onDM(pt) {
   drawCurrPts.push(pt);
-  if (drawShape === 'free' || drawIsEraser) {
+  if (drawTool === 'pencil') {
     drawSeg(drawCtx, drawCurrPts[drawCurrPts.length - 2], pt);
+  } else if (drawTool === 'eraser') {
+    drawSeg(drawCtx, drawCurrPts[drawCurrPts.length - 2], pt);
+  } else if (drawTool === 'spray') {
+    _sprayAt(drawCtx, pt, drawCurrPts.length);
   } else {
+    // Shape preview on live layer
     drawLiveCtx.clearRect(0, 0, drawLiveCv.width, drawLiveCv.height);
-    drawShapeOn(drawLiveCtx, drawStartPt, pt, drawColor, drawSize, drawShape);
+    _drawShape(drawLiveCtx, drawStartPt, pt, drawColor, drawSize, drawTool);
   }
 }
 
@@ -183,15 +208,16 @@ function onDE() {
   drawIsDrawing = false;
   clearInterval(drawSendTimer); drawSendTimer = null;
   const ep = drawCurrPts[drawCurrPts.length - 1] || drawStartPt;
-  if (drawShape !== 'free' && !drawIsEraser && drawStartPt) {
-    drawShapeOn(drawCtx, drawStartPt, ep, drawColor, drawSize, drawShape);
+  const isShape = ['line', 'rect', 'circle'].includes(drawTool);
+  if (isShape && drawStartPt) {
+    _drawShape(drawCtx, drawStartPt, ep, drawColor, drawSize, drawTool);
     drawLiveCtx.clearRect(0, 0, drawLiveCv.width, drawLiveCv.height);
   }
   const { CCI, CU } = _getState();
   if (!CCI || !drawCurrPts.length) return;
   _push(_ref(_db, drawFBPath() + '/strokes'), {
-    c: drawColor, s: drawSize, e: drawIsEraser,
-    sh: drawShape, pts: drawCurrPts, sp: drawStartPt,
+    c: drawColor, s: drawSize, e: drawTool === 'eraser',
+    sh: drawTool, pts: drawCurrPts, sp: drawStartPt,
     by: CU.uid, ts: Date.now()
   });
   _set(_ref(_db, drawFBPath() + '/live/' + CU.uid), null);
@@ -202,17 +228,18 @@ function pushLiveStroke() {
   const { CCI, CU } = _getState();
   if (!CCI || !drawCurrPts.length) return;
   _set(_ref(_db, drawFBPath() + '/live/' + CU.uid), {
-    c: drawColor, s: drawSize, e: drawIsEraser,
-    sh: drawShape, pts: drawCurrPts.slice(-100), sp: drawStartPt
+    c: drawColor, s: drawSize, e: drawTool === 'eraser',
+    sh: drawTool, pts: drawCurrPts.slice(-80), sp: drawStartPt
   });
 }
 
-// ── canvas rendering ──
+// ── rendering helpers ──
 function drawSeg(ctx, from, to) {
   const W = ctx.canvas.width, H = ctx.canvas.height;
-  ctx.globalCompositeOperation = drawIsEraser ? 'destination-out' : 'source-over';
-  ctx.strokeStyle = drawIsEraser ? 'rgba(0,0,0,1)' : drawColor;
-  ctx.fillStyle   = drawIsEraser ? 'rgba(0,0,0,1)' : drawColor;
+  const isErase = drawTool === 'eraser';
+  ctx.globalCompositeOperation = isErase ? 'destination-out' : 'source-over';
+  ctx.strokeStyle = isErase ? 'rgba(0,0,0,1)' : drawColor;
+  ctx.fillStyle   = isErase ? 'rgba(0,0,0,1)' : drawColor;
   ctx.lineWidth = drawSize; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   if (from === to || (from.x === to.x && from.y === to.y)) {
     ctx.beginPath(); ctx.arc(from.x*W, from.y*H, drawSize/2, 0, Math.PI*2); ctx.fill();
@@ -222,30 +249,102 @@ function drawSeg(ctx, from, to) {
   ctx.globalCompositeOperation = 'source-over';
 }
 
-function drawShapeOn(ctx, from, to, color, size, shape) {
+function _drawShape(ctx, from, to, color, size, shape) {
   const W = ctx.canvas.width, H = ctx.canvas.height;
   const x1 = from.x*W, y1 = from.y*H, x2 = to.x*W, y2 = to.y*H;
   ctx.strokeStyle = color; ctx.lineWidth = size || 3;
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   ctx.beginPath();
-  if (shape === 'line') { ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke(); }
-  else if (shape === 'rect') { ctx.strokeRect(x1,y1,x2-x1,y2-y1); }
+  if (shape === 'line')   { ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke(); }
+  else if (shape === 'rect')   { ctx.strokeRect(x1,y1,x2-x1,y2-y1); }
   else if (shape === 'circle') {
-    const cx=(x1+x2)/2, cy=(y1+y2)/2, rx=Math.abs(x2-x1)/2, ry=Math.abs(y2-y1)/2;
-    ctx.ellipse(cx,cy,Math.max(rx,1),Math.max(ry,1),0,0,Math.PI*2); ctx.stroke();
+    const cx=(x1+x2)/2, cy=(y1+y2)/2;
+    ctx.ellipse(cx,cy,Math.max(Math.abs(x2-x1)/2,1),Math.max(Math.abs(y2-y1)/2,1),0,0,Math.PI*2);
+    ctx.stroke();
   }
+}
+
+// Spray: deterministic based on point index so both sides look similar
+function _sprayAt(ctx, pt, seed) {
+  const W = ctx.canvas.width, H = ctx.canvas.height;
+  const cx = pt.x*W, cy = pt.y*H;
+  const radius = Math.max(10, drawSize * 5);
+  const count  = Math.max(8, drawSize * 4);
+  ctx.fillStyle = drawColor;
+  for (let i = 0; i < count; i++) {
+    const a = _pr(seed * 100 + i)       * Math.PI * 2;
+    const r = _pr(seed * 100 + i + 50)  * radius;
+    ctx.beginPath();
+    ctx.arc(cx + Math.cos(a)*r, cy + Math.sin(a)*r, _pr(seed+i+99)*1.2+0.3, 0, Math.PI*2);
+    ctx.fill();
+  }
+}
+// Pseudo-random (deterministic, no seed needed for live; used for replay)
+function _pr(n) { const x = Math.sin(n + 1) * 43758.5; return x - Math.floor(x); }
+
+// Flood fill (scanline)
+function _floodFill(ctx, sx, sy, hexColor) {
+  const W = ctx.canvas.width, H = ctx.canvas.height;
+  if (sx < 0 || sx >= W || sy < 0 || sy >= H) return;
+  const img  = ctx.getImageData(0, 0, W, H);
+  const data = img.data;
+  const si   = (sy * W + sx) * 4;
+  const [tr, tg, tb, ta] = [data[si], data[si+1], data[si+2], data[si+3]];
+  const fr = parseInt(hexColor.slice(1,3),16);
+  const fg = parseInt(hexColor.slice(3,5),16);
+  const fb = parseInt(hexColor.slice(5,7),16);
+  if (tr===fr && tg===fg && tb===fb && ta===255) return;
+  const match = i => data[i]===tr && data[i+1]===tg && data[i+2]===tb && data[i+3]===ta;
+  const stack = [sx + sy * W];
+  const visited = new Uint8Array(W * H);
+  while (stack.length) {
+    const pos = stack.pop();
+    if (visited[pos]) continue;
+    visited[pos] = 1;
+    const idx = pos * 4;
+    if (!match(idx)) continue;
+    data[idx]=fr; data[idx+1]=fg; data[idx+2]=fb; data[idx+3]=255;
+    const x = pos % W, y = (pos/W)|0;
+    if (x > 0)     stack.push(pos - 1);
+    if (x < W - 1) stack.push(pos + 1);
+    if (y > 0)     stack.push(pos - W);
+    if (y < H - 1) stack.push(pos + W);
+  }
+  ctx.putImageData(img, 0, 0);
 }
 
 function renderStroke(ctx, stroke) {
   const W = ctx.canvas.width, H = ctx.canvas.height;
   const pts = stroke.pts || [];
   if (!pts.length) return;
+  const sh = stroke.sh || 'free';
+
+  if (sh === 'fill') {
+    _floodFill(ctx, Math.round(pts[0].x*W), Math.round(pts[0].y*H), stroke.c || '#000');
+    return;
+  }
+  if (sh === 'spray') {
+    ctx.fillStyle = stroke.c || '#fff';
+    const radius = Math.max(10, (stroke.s||3) * 5);
+    const count  = Math.max(8,  (stroke.s||3) * 4);
+    pts.forEach((pt, pi) => {
+      for (let i = 0; i < count; i++) {
+        const a = _pr(pi*100+i)    * Math.PI * 2;
+        const r = _pr(pi*100+i+50) * radius;
+        ctx.beginPath();
+        ctx.arc(pt.x*W + Math.cos(a)*r, pt.y*H + Math.sin(a)*r, _pr(pi+i+99)*1.2+0.3, 0, Math.PI*2);
+        ctx.fill();
+      }
+    });
+    return;
+  }
+
   ctx.globalCompositeOperation = stroke.e ? 'destination-out' : 'source-over';
   ctx.strokeStyle = stroke.e ? 'rgba(0,0,0,1)' : stroke.c;
   ctx.fillStyle   = stroke.e ? 'rgba(0,0,0,1)' : stroke.c;
   ctx.lineWidth = stroke.s || 3; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-  const sh = stroke.sh || 'free';
-  if (sh === 'free' || stroke.e) {
+
+  if (sh === 'free' || sh === 'pencil' || sh === 'eraser' || stroke.e) {
     if (pts.length === 1) {
       ctx.beginPath(); ctx.arc(pts[0].x*W, pts[0].y*H, (stroke.s||3)/2, 0, Math.PI*2); ctx.fill();
     } else {
@@ -255,7 +354,7 @@ function renderStroke(ctx, stroke) {
     }
   } else {
     const sp = stroke.sp || pts[0], ep = pts[pts.length-1];
-    drawShapeOn(ctx, sp, ep, stroke.c, stroke.s, sh);
+    _drawShape(ctx, sp, ep, stroke.c, stroke.s, sh);
   }
   ctx.globalCompositeOperation = 'source-over';
 }
@@ -270,13 +369,11 @@ export function startDrawSync() {
   drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
   drawLiveCtx.clearRect(0, 0, drawLiveCv.width, drawLiveCv.height);
 
-  // Permanent strokes
   drawUnsub = _onChildAdded(_ref(_db, drawFBPath() + '/strokes'), snap => {
     const s = snap.val();
     if (s && drawCtx) renderStroke(drawCtx, s);
   });
 
-  // Live strokes from other user
   const { CU } = _getState();
   drawLiveUnsub = _onValue(_ref(_db, drawFBPath() + '/live'), snap => {
     const all = snap.val() || {};
@@ -288,7 +385,6 @@ export function startDrawSync() {
     });
   });
 
-  // Auto-open for receiver when other user starts drawing
   drawActiveUnsub = _onValue(_ref(_db, drawFBPath() + '/active'), snap => {
     const d = snap.val();
     const { CU: cu } = _getState();
@@ -305,35 +401,51 @@ async function clearDraw() {
   startDrawSync();
 }
 
-// ── toolbar handlers ──
+// ── toolbar: tool ──
+function setTool(btn) {
+  document.querySelectorAll('.dtool').forEach(b => b.classList.remove('act'));
+  btn.classList.add('act');
+  const t = btn.dataset.tool;
+  if (t !== 'eyedrop') drawPrevTool = t;
+  drawTool = t;
+  if (drawCanvas) {
+    drawCanvas.style.cursor = (t === 'eraser') ? 'cell' : 'crosshair';
+  }
+}
+
+function _setToolByName(name) {
+  drawTool = name;
+  document.querySelectorAll('.dtool').forEach(b => {
+    b.classList.toggle('act', b.dataset.tool === name);
+  });
+  if (drawCanvas) drawCanvas.style.cursor = (name === 'eraser') ? 'cell' : 'crosshair';
+}
+
+// ── toolbar: size ──
+function setDS(btn) {
+  document.querySelectorAll('.dsz').forEach(b => b.classList.remove('act'));
+  btn.classList.add('act');
+  drawSize = parseInt(btn.dataset.s);
+}
+
+// ── toolbar: colour ──
 function setDC(el_) {
   document.querySelectorAll('.dco').forEach(d => d.classList.remove('act'));
   el_.classList.add('act');
-  drawColor = el_.dataset.c; drawIsEraser = false;
-  document.querySelectorAll('.erase-btn').forEach(b => b.classList.remove('act'));
+  drawColor = el_.dataset.c;
+  _updateColorUI(drawColor);
   _closeWheel();
 }
-function setDS(btn) {
-  document.querySelectorAll('.dsb').forEach(b => b.classList.remove('act'));
-  btn.classList.add('act');
-  drawSize = parseInt(btn.dataset.s); drawIsEraser = false;
-  document.querySelectorAll('.erase-btn').forEach(b => b.classList.remove('act'));
-}
-function setEraser(btn) {
-  document.querySelectorAll('.dsb, .dshp').forEach(b => b.classList.remove('act'));
-  btn.classList.add('act'); drawIsEraser = true;
-  drawSize = parseInt(btn.dataset.es) || 28;
-}
-function setEraserLg(btn) {
-  document.querySelectorAll('.dsb, .dshp').forEach(b => b.classList.remove('act'));
-  btn.classList.add('act'); drawIsEraser = true;
-  drawSize = parseInt(btn.dataset.es) || 55;
-}
-function setShape(btn) {
-  document.querySelectorAll('.dshp').forEach(b => b.classList.remove('act'));
-  btn.classList.add('act');
-  drawShape = btn.dataset.sh; drawIsEraser = false;
-  document.querySelectorAll('.erase-btn').forEach(b => b.classList.remove('act'));
+
+function _updateColorUI(hex) {
+  const cc = el('draw-cur-color');
+  const ch = el('draw-cur-hex');
+  if (cc) cc.style.background = hex;
+  if (ch) ch.textContent = hex;
+  const hp = el('draw-hex-prev');
+  if (hp) hp.style.background = hex;
+  const hi = el('draw-hex');
+  if (hi) hi.value = hex;
 }
 
 // ── colour wheel ──
@@ -354,62 +466,52 @@ function _initColorWheel() {
   el('draw-wheel-cv').addEventListener('click', e => {
     const cv = el('draw-wheel-cv');
     const r  = cv.getBoundingClientRect();
-    const x  = e.clientX - r.left - r.width  / 2;
-    const y  = e.clientY - r.top  - r.height / 2;
-    const maxR = r.width / 2;
+    const x  = e.clientX - r.left - r.width/2;
+    const y  = e.clientY - r.top  - r.height/2;
     const dist = Math.sqrt(x*x + y*y);
-    if (dist > maxR) return;
-    drawHue  = ((Math.atan2(y, x) * 180 / Math.PI) + 360) % 360;
-    drawSatW = Math.min(dist / maxR * 100, 100);
+    if (dist > r.width/2) return;
+    drawHue  = ((Math.atan2(y,x)*180/Math.PI)+360)%360;
+    drawSatW = Math.min(dist/(r.width/2)*100, 100);
     _applyWheelColor();
   });
-  el('draw-hex').value = drawColor;
-  el('draw-hex-prev').style.background = drawColor;
+  _updateColorUI(drawColor);
 }
 
 function _renderColorWheel(cv) {
-  const ctx  = cv.getContext('2d');
-  const size = cv.width;
-  const cx = size/2, cy = size/2, r = size/2 - 1;
-  const img  = ctx.createImageData(size, size);
-  for (let py = 0; py < size; py++) {
-    for (let px = 0; px < size; px++) {
-      const dx = px - cx, dy = py - cy;
-      const dist = Math.sqrt(dx*dx + dy*dy);
-      if (dist > r) continue;
-      const h = ((Math.atan2(dy, dx) * 180 / Math.PI) + 360) % 360;
-      const s = dist / r;
-      const [R, G, B] = _hslToRgb(h / 360, s, 0.5);
-      const i = (py * size + px) * 4;
-      img.data[i] = R; img.data[i+1] = G; img.data[i+2] = B; img.data[i+3] = 255;
+  const ctx = cv.getContext('2d');
+  const sz = cv.width, cx = sz/2, cy = sz/2, r = sz/2 - 1;
+  const img = ctx.createImageData(sz, sz);
+  for (let py = 0; py < sz; py++) {
+    for (let px = 0; px < sz; px++) {
+      const dx = px-cx, dy = py-cy, d = Math.sqrt(dx*dx+dy*dy);
+      if (d > r) continue;
+      const h = ((Math.atan2(dy,dx)*180/Math.PI)+360)%360;
+      const [R,G,B] = _hsl(h/360, d/r, 0.5);
+      const i = (py*sz+px)*4;
+      img.data[i]=R; img.data[i+1]=G; img.data[i+2]=B; img.data[i+3]=255;
     }
   }
   ctx.putImageData(img, 0, 0);
-  // White centre dot
-  ctx.beginPath(); ctx.arc(cx, cy, 4, 0, Math.PI*2);
-  ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.fill();
+  // Center white dot
+  ctx.beginPath(); ctx.arc(cx, cy, 5, 0, Math.PI*2);
+  ctx.fillStyle = 'rgba(255,255,255,0.45)'; ctx.fill();
 }
 
-function _hslToRgb(h, s, l) {
-  const k = n => (n + h * 12) % 12;
-  const a = s * Math.min(l, 1 - l);
-  const f = n => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+function _hsl(h, s, l) {
+  const k = n => (n + h*12) % 12, a = s * Math.min(l, 1-l);
+  const f = n => l - a * Math.max(-1, Math.min(k(n)-3, Math.min(9-k(n), 1)));
   return [Math.round(f(0)*255), Math.round(f(8)*255), Math.round(f(4)*255)];
 }
-
-function _hslToHex(h, s, l) {
-  const [r, g, b] = _hslToRgb(h/360, s/100, l/100);
-  return '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
+function _hslHex(h, s, l) {
+  const [r,g,b] = _hsl(h/360, s/100, l/100);
+  return '#' + [r,g,b].map(v => v.toString(16).padStart(2,'0')).join('');
 }
 
 function _applyWheelColor() {
-  drawColor = _hslToHex(drawHue, drawSatW, drawLighW);
-  drawIsEraser = false;
-  el('draw-hex').value = drawColor;
-  el('draw-hex-prev').style.background = drawColor;
+  drawColor = _hslHex(drawHue, drawSatW, drawLighW);
+  _updateColorUI(drawColor);
   document.querySelectorAll('.dco').forEach(d => d.classList.remove('act'));
-  el('dco-custom').classList.add('act');
-  document.querySelectorAll('.erase-btn').forEach(b => b.classList.remove('act'));
+  el('dco-custom')?.classList.add('act');
 }
 
 function onDrawL(val) {
@@ -420,13 +522,11 @@ function onDrawL(val) {
 function onDrawHex(val) {
   const clean = val.trim();
   if (!/^#[0-9a-fA-F]{6}$/.test(clean)) {
-    el('draw-hex-prev').style.background = 'rgba(255,255,255,0.1)';
+    if (el('draw-hex-prev')) el('draw-hex-prev').style.background = 'rgba(255,255,255,0.08)';
     return;
   }
   drawColor = clean;
-  el('draw-hex-prev').style.background = clean;
-  drawIsEraser = false;
+  _updateColorUI(clean);
   document.querySelectorAll('.dco').forEach(d => d.classList.remove('act'));
-  el('dco-custom').classList.add('act');
-  document.querySelectorAll('.erase-btn').forEach(b => b.classList.remove('act'));
+  el('dco-custom')?.classList.add('act');
 }

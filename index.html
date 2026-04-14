@@ -222,74 +222,98 @@
 
           <!-- Floating draw toolbar -->
           <div class="draw-ftb hidden" id="draw-ftb">
-            <!-- Header / drag handle -->
+
+            <!-- Drag header -->
             <div class="draw-ftb-hdr" id="draw-ftb-drag">
-              <span>🎨 Draw</span>
+              <svg width="12" height="10" viewBox="0 0 12 10" fill="none"><rect width="12" height="1.5" rx=".75" fill="rgba(255,255,255,.4)"/><rect y="4.25" width="12" height="1.5" rx=".75" fill="rgba(255,255,255,.4)"/><rect y="8.5" width="12" height="1.5" rx=".75" fill="rgba(255,255,255,.4)"/></svg>
+              <span class="draw-ftb-title">Draw</span>
               <button class="draw-x-btn" onclick="toggleDraw()">✕</button>
             </div>
 
-            <!-- Colour section -->
-            <div class="draw-section">
-              <div class="draw-sec-lbl">Colour</div>
-              <div class="draw-colors">
+            <!-- Tool grid (2 cols × 4 rows) -->
+            <div class="draw-tools-grid">
+
+              <button class="dtool act" data-tool="pencil" onclick="setTool(this)" title="Pencil">
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2.5l3.5 3.5L6 17.5 2 18l.5-4L14 2.5z"/><line x1="11" y1="5" x2="15" y2="9"/></svg>
+              </button>
+
+              <button class="dtool" data-tool="spray" onclick="setTool(this)" title="Spray">
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="10" width="7" height="8" rx="1.5" stroke-width="1.6"/><path d="M9 13.5h2.5M9 16h2.5"/><path d="M12 11V7.5a1 1 0 011-1h2a1 1 0 011 1V11"/><circle cx="17.5" cy="5" r="1" fill="currentColor" stroke="none"/><circle cx="15" cy="3" r="1" fill="currentColor" stroke="none"/><circle cx="18.5" cy="7.5" r="1" fill="currentColor" stroke="none"/></svg>
+              </button>
+
+              <button class="dtool" data-tool="line" onclick="setTool(this)" title="Line">
+                <svg viewBox="0 0 20 20" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3.5" y1="16.5" x2="16.5" y2="3.5"/></svg>
+              </button>
+
+              <button class="dtool" data-tool="rect" onclick="setTool(this)" title="Rectangle">
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><rect x="3" y="5" width="14" height="10" rx="1.5"/></svg>
+              </button>
+
+              <button class="dtool" data-tool="circle" onclick="setTool(this)" title="Circle">
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><ellipse cx="10" cy="10" rx="7" ry="5.5"/></svg>
+              </button>
+
+              <button class="dtool" data-tool="eraser" onclick="setTool(this)" title="Eraser">
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 3.5l3 3-7.5 9.5H5l-2.5-2.5 7.5-9.5z"/><line x1="4" y1="16" x2="18" y2="16"/></svg>
+              </button>
+
+              <button class="dtool" data-tool="eyedrop" onclick="setTool(this)" title="Colour Picker">
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12.5 3l4.5 4.5-8 8-3.5 1L4 13l1-3.5 7.5-6.5z"/><path d="M3 17l1.5-1.5"/><circle cx="3.5" cy="17.5" r="1.5" fill="currentColor" stroke="none"/></svg>
+              </button>
+
+              <button class="dtool" data-tool="fill" onclick="setTool(this)" title="Fill">
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13l4-9 2 2-4 9H3z"/><path d="M7 4l3 3M3 13h7l-3-3"/><path d="M13 10s3 2.5 3 4.5a1.5 1.5 0 01-3 0c0-2 3-4.5 3-4.5z" fill="currentColor" stroke="none"/></svg>
+              </button>
+
+            </div>
+
+            <!-- Sizes -->
+            <div class="draw-sizes-row">
+              <span class="draw-sz-lbl">Size</span>
+              <div class="draw-sizes">
+                <button class="dsz act" data-s="2"  onclick="setDS(this)"></button>
+                <button class="dsz"     data-s="6"  onclick="setDS(this)"></button>
+                <button class="dsz"     data-s="14" onclick="setDS(this)"></button>
+              </div>
+            </div>
+
+            <!-- Colour palette -->
+            <div class="draw-palette-sec">
+              <div class="draw-swatches">
                 <div class="dco act" data-c="#ffffff" onclick="setDC(this)" style="background:#ffffff"></div>
                 <div class="dco" data-c="#ff4f6b" onclick="setDC(this)" style="background:#ff4f6b"></div>
-                <div class="dco" data-c="#43e97b" onclick="setDC(this)" style="background:#43e97b"></div>
-                <div class="dco" data-c="#6c63ff" onclick="setDC(this)" style="background:#6c63ff"></div>
-                <div class="dco" data-c="#ffd700" onclick="setDC(this)" style="background:#ffd700"></div>
                 <div class="dco" data-c="#ff9a00" onclick="setDC(this)" style="background:#ff9a00"></div>
+                <div class="dco" data-c="#ffd700" onclick="setDC(this)" style="background:#ffd700"></div>
+                <div class="dco" data-c="#43e97b" onclick="setDC(this)" style="background:#43e97b"></div>
                 <div class="dco" data-c="#00cfff" onclick="setDC(this)" style="background:#00cfff"></div>
+                <div class="dco" data-c="#6c63ff" onclick="setDC(this)" style="background:#6c63ff"></div>
                 <div class="dco" data-c="#ff69b4" onclick="setDC(this)" style="background:#ff69b4"></div>
-                <div class="dco dco-custom" id="dco-custom" onclick="toggleColorWheel()" title="Custom colour (colour wheel)"></div>
+                <div class="dco" data-c="#000000" onclick="setDC(this)" style="background:#1a1a2e;border-color:rgba(255,255,255,.15)!important"></div>
+                <div class="dco dco-custom" id="dco-custom" onclick="toggleColorWheel()" title="Colour wheel"></div>
               </div>
-              <!-- Colour wheel popup -->
-              <div class="draw-wheel-popup hidden" id="draw-wheel-popup">
-                <canvas id="draw-wheel-cv" width="170" height="170"></canvas>
-                <div class="draw-wheel-row">
-                  <span class="draw-wheel-lbl">Light</span>
-                  <input type="range" id="draw-l-slider" min="15" max="85" value="50" class="draw-l-slider" oninput="onDrawL(this.value)">
-                </div>
-                <div class="draw-wheel-row">
-                  <input type="text" id="draw-hex" maxlength="7" placeholder="#ffffff" class="draw-hex-input" oninput="onDrawHex(this.value)">
-                  <div id="draw-hex-prev" class="draw-hex-prev" style="background:#ffffff"></div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Brush section -->
-            <div class="draw-section">
-              <div class="draw-sec-lbl">Brush</div>
-              <div class="draw-row">
-                <button class="dsb act" data-s="2"  onclick="setDS(this)">S</button>
-                <button class="dsb"     data-s="6"  onclick="setDS(this)">M</button>
-                <button class="dsb"     data-s="14" onclick="setDS(this)">L</button>
-              </div>
-            </div>
-
-            <!-- Shape section -->
-            <div class="draw-section">
-              <div class="draw-sec-lbl">Shape</div>
-              <div class="draw-row">
-                <button class="dshp act" data-sh="free"   onclick="setShape(this)" title="Freehand">✏️</button>
-                <button class="dshp"     data-sh="line"   onclick="setShape(this)" title="Line">╱</button>
-                <button class="dshp"     data-sh="rect"   onclick="setShape(this)" title="Rectangle">▭</button>
-                <button class="dshp"     data-sh="circle" onclick="setShape(this)" title="Circle">◯</button>
-              </div>
-            </div>
-
-            <!-- Eraser section -->
-            <div class="draw-section">
-              <div class="draw-sec-lbl">Eraser</div>
-              <div class="draw-row">
-                <button class="dsb erase-btn" data-es="28" onclick="setEraser(this)">M</button>
-                <button class="dsb erase-btn" data-es="55" onclick="setEraserLg(this)">L</button>
+              <!-- Current colour preview -->
+              <div class="draw-cur-row">
+                <div class="draw-cur-color" id="draw-cur-color"></div>
+                <span class="draw-cur-hex" id="draw-cur-hex">#ffffff</span>
               </div>
             </div>
 
             <!-- Clear -->
-            <div class="draw-section draw-section-last">
-              <button class="draw-clear-btn" onclick="clearDraw()">🗑 Clear Canvas</button>
+            <button class="draw-clear-btn" onclick="clearDraw()">Clear Canvas</button>
+
+            <!-- Colour wheel popup -->
+            <div class="draw-wheel-popup hidden" id="draw-wheel-popup">
+              <canvas id="draw-wheel-cv" width="158" height="158"></canvas>
+              <div class="draw-wheel-row">
+                <span class="draw-wheel-lbl">L</span>
+                <input type="range" id="draw-l-slider" min="15" max="85" value="50" class="draw-l-slider" oninput="onDrawL(this.value)">
+              </div>
+              <div class="draw-wheel-row">
+                <input type="text" id="draw-hex" maxlength="7" placeholder="#ffffff" class="draw-hex-input" oninput="onDrawHex(this.value)">
+                <div id="draw-hex-prev" class="draw-hex-prev" style="background:#ffffff"></div>
+              </div>
             </div>
+
           </div>
         </div>
 

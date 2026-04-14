@@ -506,9 +506,9 @@ function mkMsg(msg, isMe, con) {
 
   const replyHtml = msg.replyTo ? `
     <div class="rp-quote" onclick="scrollToMsg('${msg.replyTo.id}')">
-      <div class="rp-qname">${escHtml(msg.replyTo.senderName)}</div>
-      <div class="rp-qtext">${escHtml(msg.replyTo.text).substring(0, 80)}</div>
-    </div>` : '';
+      <div class="rp-qname"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 5.5l3-3v2c3 0 5.5 1.5 6 5.5-1.5-2.5-3-3.5-6-3.5v2L1 5.5z"/></svg>${escHtml(msg.replyTo.senderName)}</div>
+      <div class="rp-qtext">${escHtml(msg.replyTo.text).substring(0, 100)}</div>
+    </div><div class="rp-qdivider"></div>` : '';
 
   const sender     = isGroup ? (memberCache[msg.sender] || {}) : {};
   const senderAv   = isGroup ? (sender.avatar || '👤') : (CCT?.avatar || '👤');

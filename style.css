@@ -623,16 +623,38 @@ body {
 
 /* ── REPLY QUOTE (inside bubble) ── */
 .rp-quote {
-  background: rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.07);
   border-left: 3px solid var(--accent);
-  border-radius: 6px; padding: 5px 9px;
-  margin-bottom: 6px; cursor: pointer;
+  border-radius: 7px; padding: 6px 10px;
+  margin-bottom: 8px; cursor: pointer;
   transition: background 0.15s;
+  max-width: 100%; overflow: hidden;
+  position: relative;
 }
-.mr.me .rp-quote { background: rgba(0,0,0,0.15); }
-.rp-quote:hover   { background: rgba(255,255,255,0.15); }
-.rp-qname { font-size: 10px; font-weight: 700; color: var(--accent); margin-bottom: 2px; }
-.rp-qtext { font-size: 11px; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
+.rp-quote::before {
+  content: '';
+  position: absolute; inset: 0; left: 3px;
+  background: linear-gradient(90deg, rgba(108,99,255,0.08) 0%, transparent 60%);
+  border-radius: 0 7px 7px 0; pointer-events: none;
+}
+.mr.me .rp-quote { background: rgba(0,0,0,0.18); }
+.mr.me .rp-quote::before { background: linear-gradient(90deg, rgba(0,0,0,0.12) 0%, transparent 60%); }
+.rp-quote:hover   { background: rgba(255,255,255,0.13); }
+.rp-qname {
+  font-size: 11px; font-weight: 700; color: var(--accent);
+  margin-bottom: 3px; display: flex; align-items: center; gap: 4px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.rp-qname svg { width: 11px; height: 11px; flex-shrink: 0; opacity: 0.85; }
+.rp-qtext {
+  font-size: 12px; color: var(--text2);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 100%;
+}
+.rp-qdivider {
+  height: 1px; background: rgba(255,255,255,0.07);
+  margin: 7px 0 6px; width: 100%;
+}
 
 /* ── SCROLL HIGHLIGHT ── */
 @keyframes msgFlash { 0%,100%{background:transparent} 40%{background:rgba(108,99,255,0.25)} }

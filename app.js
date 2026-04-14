@@ -5,6 +5,7 @@
 // ═══════════════════════════════════════════════════════
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { initDrawFeature, onChatOpen as drawChatOpen } from './features/draw.js';
 import {
   getAuth,
   createUserWithEmailAndPassword,
@@ -45,6 +46,9 @@ const IMGBB_KEY = 'e9167e60305454e517e135847608509d';
 // ══════════════════════════════════════════════════════
 
 const THREE_DAYS = 3 * 24 * 60 * 60 * 1000;   // ms
+
+// ── feature: draw ──
+initDrawFeature(db, ref, set, push, onValue, onChildAdded, () => ({ CU, CCI, isGroup }));
 
 // ── state ──
 let CU       = null;   // current user
@@ -410,7 +414,7 @@ async function openChat(uid, u) {
   });
 
   startMusicSync(CCI);
-  if (drawOpen) startDrawSync();
+  drawChatOpen();
   loadMsgs();
 }
 
@@ -894,7 +898,7 @@ async function openGroupChat(gid, g) {
   });
 
   startMusicSync(gid);
-  if (drawOpen) startDrawSync();
+  drawChatOpen();
   loadMsgs();
 }
 
@@ -1548,279 +1552,6 @@ function startMusicSync(chatId) {
     // (no else needed — play/pause is handled inside applyRemoteSeek + onYTState)
   });
 }
-
-// ═══════════════════════════════════════
-//  🎨 LIVE DRAW
-// ═══════════════════════════════════════
-
-let drawOpen      = false;
-let drawInited    = false;
-let drawCanvas    = null, drawCtx    = null;
-let drawLiveCv    = null, drawLiveCtx = null;
-let drawIsDrawing = false;
-let drawColor     = '#ffffff';
-let drawSize      = 3;
-let drawIsEraser  = false;
-let drawShape     = 'free';   // 'free'|'line'|'rect'|'circle'
-let drawCurrPts   = [];
-let drawStartPt   = null;
-let drawSendTimer = null;
-let drawUnsub     = null;
-let drawLiveUnsub = null;
-
-function drawFBPath() {
-  return (isGroup ? `groups/${CCI}` : `chats/${CCI}`) + '/drawing';
-}
-
-window.toggleDraw = function () {
-  drawOpen = !drawOpen;
-  const show = drawOpen;
-  el('draw-canvas').classList.toggle('hidden', !show);
-  el('draw-live').classList.toggle('hidden', !show);
-  el('draw-ftb').classList.toggle('hidden', !show);
-  // When draw is on, canvas intercepts mouse; messages still visible underneath
-  el('draw-canvas').style.pointerEvents = show ? 'all' : 'none';
-  if (show) {
-    if (!drawInited) initDraw();
-    requestAnimationFrame(() => { sizeDraw(); if (CCI) startDrawSync(); });
-  }
-};
-
-function initDraw() {
-  drawCanvas  = el('draw-canvas');
-  drawLiveCv  = el('draw-live');
-  drawCtx     = drawCanvas.getContext('2d');
-  drawLiveCtx = drawLiveCv.getContext('2d');
-  drawInited  = true;
-
-  // ── drag the toolbar ──
-  const ftb  = el('draw-ftb');
-  const grip = el('draw-ftb-drag');
-  let drag = null;
-  grip.addEventListener('mousedown', e => {
-    const r = ftb.getBoundingClientRect();
-    drag = { ox: e.clientX - r.left, oy: e.clientY - r.top };
-  });
-  document.addEventListener('mousemove', e => {
-    if (!drag) return;
-    const wrap = el('ma-wrap').getBoundingClientRect();
-    ftb.style.left = Math.max(0, Math.min(e.clientX - drag.ox - wrap.left, wrap.width  - ftb.offsetWidth))  + 'px';
-    ftb.style.top  = Math.max(0, Math.min(e.clientY - drag.oy - wrap.top,  wrap.height - ftb.offsetHeight)) + 'px';
-    ftb.style.right = 'auto';
-  });
-  document.addEventListener('mouseup', () => { drag = null; });
-
-  // Resize: re-fit canvases when window resizes
-  new ResizeObserver(() => { if (drawOpen) sizeDraw(true); }).observe(el('ma-wrap'));
-
-  const on = (t, ev, fn, o) => t.addEventListener(ev, fn, o);
-  on(drawCanvas, 'mousedown',  e => onDS(ptOf(e)));
-  on(drawCanvas, 'mousemove',  e => { if (drawIsDrawing) onDM(ptOf(e)); });
-  on(drawCanvas, 'mouseup',    onDE);
-  on(drawCanvas, 'mouseleave', onDE);
-  on(drawCanvas, 'touchstart', e => { e.preventDefault(); onDS(ptOf(e.touches[0])); }, {passive:false});
-  on(drawCanvas, 'touchmove',  e => { e.preventDefault(); if (drawIsDrawing) onDM(ptOf(e.touches[0])); }, {passive:false});
-  on(drawCanvas, 'touchend',   e => { e.preventDefault(); onDE(); }, {passive:false});
-}
-
-function sizeDraw(redraw) {
-  if (!drawCanvas) return;
-  const ma = el('ma');            // size to message pane, not full wrap
-  const w  = ma.clientWidth;
-  const h  = ma.clientHeight;
-  if (!w || !h) return;
-  // Position canvases to sit exactly over #ma
-  [drawCanvas, drawLiveCv].forEach(c => {
-    c.width  = w;
-    c.height = h;
-    c.style.width  = w + 'px';
-    c.style.height = h + 'px';
-    c.style.top    = ma.offsetTop + 'px';
-    c.style.left   = ma.offsetLeft + 'px';
-  });
-  if (redraw && CCI) startDrawSync();
-}
-
-function ptOf(e) {
-  const r = drawCanvas.getBoundingClientRect();
-  return { x: (e.clientX - r.left) / drawCanvas.width,
-           y: (e.clientY - r.top)  / drawCanvas.height };
-}
-
-// ── drawing events ──
-function onDS(pt) {
-  drawIsDrawing = true;
-  drawStartPt   = pt;
-  drawCurrPts   = [pt];
-  if (drawShape === 'free' || drawIsEraser) drawSeg(drawCtx, pt, pt);
-  drawSendTimer = setInterval(pushLiveStroke, 55);
-}
-
-function onDM(pt) {
-  drawCurrPts.push(pt);
-  if (drawShape === 'free' || drawIsEraser) {
-    drawSeg(drawCtx, drawCurrPts[drawCurrPts.length - 2], pt);
-  } else {
-    // shape preview on live layer
-    drawLiveCtx.clearRect(0, 0, drawLiveCv.width, drawLiveCv.height);
-    drawShapeOn(drawLiveCtx, drawStartPt, pt, drawColor, drawSize, drawShape);
-  }
-}
-
-function onDE() {
-  if (!drawIsDrawing) return;
-  drawIsDrawing = false;
-  clearInterval(drawSendTimer); drawSendTimer = null;
-
-  const ep = drawCurrPts[drawCurrPts.length - 1] || drawStartPt;
-  if ((drawShape !== 'free') && !drawIsEraser && drawStartPt) {
-    drawShapeOn(drawCtx, drawStartPt, ep, drawColor, drawSize, drawShape);
-    drawLiveCtx.clearRect(0, 0, drawLiveCv.width, drawLiveCv.height);
-  }
-  if (!CCI || !drawCurrPts.length) return;
-
-  push(ref(db, drawFBPath() + '/strokes'), {
-    c: drawColor, s: drawSize, e: drawIsEraser,
-    sh: drawShape, pts: drawCurrPts, sp: drawStartPt,
-    by: CU.uid, ts: Date.now()
-  });
-  set(ref(db, drawFBPath() + '/live/' + CU.uid), null);
-  drawCurrPts = [];
-}
-
-function pushLiveStroke() {
-  if (!CCI || !drawCurrPts.length) return;
-  set(ref(db, drawFBPath() + '/live/' + CU.uid), {
-    c: drawColor, s: drawSize, e: drawIsEraser,
-    sh: drawShape, pts: drawCurrPts.slice(-100), sp: drawStartPt
-  });
-}
-
-// ── canvas rendering ──
-function drawSeg(ctx, from, to) {
-  const W = ctx.canvas.width, H = ctx.canvas.height;
-  ctx.globalCompositeOperation = drawIsEraser ? 'destination-out' : 'source-over';
-  ctx.strokeStyle = drawIsEraser ? 'rgba(0,0,0,1)' : drawColor;
-  ctx.fillStyle   = drawIsEraser ? 'rgba(0,0,0,1)' : drawColor;
-  ctx.lineWidth   = drawSize; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-  if (from === to || (from.x === to.x && from.y === to.y)) {
-    ctx.beginPath(); ctx.arc(from.x*W, from.y*H, drawSize/2, 0, Math.PI*2); ctx.fill();
-  } else {
-    ctx.beginPath(); ctx.moveTo(from.x*W, from.y*H); ctx.lineTo(to.x*W, to.y*H); ctx.stroke();
-  }
-  ctx.globalCompositeOperation = 'source-over';
-}
-
-function drawShapeOn(ctx, from, to, color, size, shape) {
-  const W = ctx.canvas.width, H = ctx.canvas.height;
-  const x1 = from.x*W, y1 = from.y*H, x2 = to.x*W, y2 = to.y*H;
-  ctx.strokeStyle = color; ctx.lineWidth = size || 3;
-  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-  ctx.beginPath();
-  if (shape === 'line') {
-    ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
-  } else if (shape === 'rect') {
-    ctx.strokeRect(x1, y1, x2-x1, y2-y1);
-  } else if (shape === 'circle') {
-    const cx=(x1+x2)/2, cy=(y1+y2)/2;
-    const rx=Math.abs(x2-x1)/2, ry=Math.abs(y2-y1)/2;
-    ctx.ellipse(cx, cy, Math.max(rx,1), Math.max(ry,1), 0, 0, Math.PI*2); ctx.stroke();
-  }
-}
-
-function renderStroke(ctx, stroke) {
-  const W = ctx.canvas.width, H = ctx.canvas.height;
-  const pts = stroke.pts || [];
-  if (!pts.length) return;
-  ctx.globalCompositeOperation = stroke.e ? 'destination-out' : 'source-over';
-  ctx.strokeStyle = stroke.e ? 'rgba(0,0,0,1)' : stroke.c;
-  ctx.fillStyle   = stroke.e ? 'rgba(0,0,0,1)' : stroke.c;
-  ctx.lineWidth   = stroke.s || 3; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-
-  const sh = stroke.sh || 'free';
-  if (sh === 'free' || stroke.e) {
-    if (pts.length === 1) {
-      ctx.beginPath(); ctx.arc(pts[0].x*W, pts[0].y*H, (stroke.s||3)/2, 0, Math.PI*2); ctx.fill();
-    } else {
-      ctx.beginPath(); ctx.moveTo(pts[0].x*W, pts[0].y*H);
-      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x*W, pts[i].y*H);
-      ctx.stroke();
-    }
-  } else {
-    const sp = stroke.sp || pts[0], ep = pts[pts.length-1];
-    drawShapeOn(ctx, sp, ep, stroke.c, stroke.s, sh);
-  }
-  ctx.globalCompositeOperation = 'source-over';
-}
-
-// ── Firebase sync ──
-function startDrawSync() {
-  if (drawUnsub)     { drawUnsub();     drawUnsub = null; }
-  if (drawLiveUnsub) { drawLiveUnsub(); drawLiveUnsub = null; }
-  if (!drawCanvas) return;
-  sizeDraw();
-  drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
-  drawLiveCtx.clearRect(0, 0, drawLiveCv.width, drawLiveCv.height);
-
-  // All completed strokes
-  drawUnsub = onChildAdded(ref(db, drawFBPath() + '/strokes'), snap => {
-    const s = snap.val();
-    if (s && drawCtx) renderStroke(drawCtx, s);
-  });
-
-  // Live strokes from the other person (real-time while they draw)
-  drawLiveUnsub = onValue(ref(db, drawFBPath() + '/live'), snap => {
-    const all = snap.val() || {};
-    if (!drawLiveCtx) return;
-    drawLiveCtx.clearRect(0, 0, drawLiveCv.width, drawLiveCv.height);
-    Object.entries(all).forEach(([uid, stroke]) => {
-      if (uid === CU?.uid) return; // skip own live (already on main canvas)
-      renderStroke(drawLiveCtx, stroke);
-    });
-  });
-}
-
-window.clearDraw = async function () {
-  if (!CCI) return;
-  await set(ref(db, drawFBPath()), null);
-  if (drawCtx)     drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
-  if (drawLiveCtx) drawLiveCtx.clearRect(0, 0, drawLiveCv.width, drawLiveCv.height);
-  startDrawSync();
-};
-
-window.setDC = function (el_) {
-  document.querySelectorAll('.dco').forEach(d => d.classList.remove('act'));
-  el_.classList.add('act');
-  drawColor    = el_.dataset.c;
-  drawIsEraser = false;
-  document.querySelector('.erase-btn')?.classList.remove('act');
-};
-window.setDS = function (btn) {
-  document.querySelectorAll('.dsb').forEach(b => b.classList.remove('act'));
-  btn.classList.add('act');
-  drawSize     = parseInt(btn.dataset.s);
-  drawIsEraser = false;
-  document.querySelector('.erase-btn')?.classList.remove('act');
-};
-window.setEraser = function (btn) {
-  document.querySelectorAll('.dsb, .dshp').forEach(b => b.classList.remove('act'));
-  btn.classList.add('act');
-  drawIsEraser = true;
-  drawSize = parseInt(btn.dataset.es) || 28;
-};
-window.setEraserLg = function (btn) {
-  document.querySelectorAll('.dsb, .dshp').forEach(b => b.classList.remove('act'));
-  btn.classList.add('act');
-  drawIsEraser = true;
-  drawSize = parseInt(btn.dataset.es) || 55;
-};
-window.setShape = function (btn) {
-  document.querySelectorAll('.dshp').forEach(b => b.classList.remove('act'));
-  btn.classList.add('act');
-  drawShape    = btn.dataset.sh;
-  drawIsEraser = false;
-  document.querySelector('.erase-btn')?.classList.remove('act');
-};
 
 // ── file input listeners ──
 el('fi-media').addEventListener('change', e => handleFilePick(e, 'media'));

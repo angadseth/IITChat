@@ -78,6 +78,12 @@ let mpLastFB       = null;   // last Firebase music snapshot (for drift detectio
 let mpSyncInterval = null;   // seek-drift polling interval
 let mpLastSeekedAt = 0;      // tracks which seekedAt we last applied
 
+// ── Avatar HTML helper — photo if available, else emoji ──
+function avH(av, photo) {
+  if (photo) return `<img src="${photo}" class="av-img" alt="" loading="lazy">`;
+  return av || '👤';
+}
+
 function saveUnread() { localStorage.setItem('iitchat-unread', JSON.stringify(unreadCounts)); }
 
 function updateBadge(item, count) {
@@ -183,10 +189,10 @@ onAuthStateChanged(auth, u => {
     // Load profile in background — doesn't block app open
     get(ref(db, `users/${u.uid}`)).then(snap => {
       const pr = snap.val() || {};
-      el('myav').innerHTML    = `${pr.avatar || '😎'}<div class="sd"></div>`;
-      el('spav').textContent  = pr.avatar || '😎';
-      el('spnm').textContent  = pr.name   || u.displayName || 'You';
-      el('spem').textContent  = u.email;
+      el('myav').innerHTML   = avH(pr.avatar || '😎', pr.photoURL) + `<div class="sd"></div>`;
+      el('spav').innerHTML   = avH(pr.avatar || '😎', pr.photoURL);
+      el('spnm').textContent = pr.name   || u.displayName || 'You';
+      el('spem').textContent = u.email;
     });
 
     loadContacts();
@@ -259,7 +265,7 @@ function loadContacts() {
       item.dataset.uid  = uid;
       item.innerHTML    = `
         <div class="ciav">
-          ${u.avatar || '👤'}
+          ${avH(u.avatar, u.photoURL)}
           <div class="sd ${u.online ? 'on' : 'off'}"></div>
         </div>
         <div class="cii">
@@ -360,7 +366,7 @@ async function openChat(uid, u) {
   acd.classList.remove('hidden');
   acd.style.display = 'flex';
 
-  el('chav').textContent = u.avatar || '👤';
+  el('chav').innerHTML = avH(u.avatar, u.photoURL);
   el('chn').textContent  = u.name;
 
   const chs = el('chs');
@@ -506,12 +512,13 @@ function mkMsg(msg, isMe, con) {
       <div class="rp-qtext">${escHtml(msg.replyTo.text).substring(0, 100)}</div>
     </div><div class="rp-qdivider"></div>` : '';
 
-  const sender     = isGroup ? (memberCache[msg.sender] || {}) : {};
-  const senderAv   = isGroup ? (sender.avatar || '👤') : (CCT?.avatar || '👤');
-  const senderName = isGroup ? (sender.name   || '') : (CCT?.name || '');
+  const sender      = isGroup ? (memberCache[msg.sender] || {}) : {};
+  const senderAv    = isGroup ? (sender.avatar   || '👤') : (CCT?.avatar    || '👤');
+  const senderPhoto = isGroup ? (sender.photoURL || '')   : (CCT?.photoURL  || '');
+  const senderName  = isGroup ? (sender.name     || '')   : (CCT?.name      || '');
 
   row.innerHTML = `
-    ${!isMe ? `<div class="mav">${senderAv}</div>` : ''}
+    ${!isMe ? `<div class="mav">${avH(senderAv, senderPhoto)}</div>` : ''}
     <div class="mc">
       ${!isMe && !con ? `<div class="msn">${escHtml(senderName)}</div>` : ''}
       <div class="bw">
@@ -834,7 +841,7 @@ async function openGroupChat(gid, g) {
   const acd = el('acd');
   acd.classList.remove('hidden'); acd.style.display = 'flex';
 
-  el('chav').textContent      = g.avatar || '👥';
+  el('chav').innerHTML        = g.avatar || '👥';
   el('chn').textContent       = g.name;
   el('gib').style.display     = 'flex';   // show group info button
 
@@ -1168,6 +1175,54 @@ window.capturePhoto = () => {
     const file = new File([blob], `photo_${Date.now()}.jpg`, { type: 'image/jpeg' });
     await uploadImageFile(file, false);
   }, 'image/jpeg', 0.88);
+};
+
+window.uploadProfilePic = async (file) => {
+  if (!file || !CU) return;
+  if (file.size > 8 * 1024 * 1024) { toast('❌ Max 8 MB'); return; }
+  toast('⏫ Uploading photo…');
+  try {
+    // Compress to max 400×400 via canvas
+    const compressed = await new Promise(res => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        const MAX = 400;
+        let w = img.width, h = img.height;
+        if (w > MAX || h > MAX) {
+          if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+          else       { w = Math.round(w * MAX / h); h = MAX; }
+        }
+        const cv = document.createElement('canvas');
+        cv.width = w; cv.height = h;
+        cv.getContext('2d').drawImage(img, 0, 0, w, h);
+        URL.revokeObjectURL(url);
+        cv.toBlob(res, 'image/jpeg', 0.85);
+      };
+      img.src = url;
+    });
+    const b64  = await toBase64(compressed);
+    const form = new FormData();
+    form.append('image', b64.split(',')[1]);
+    const res  = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_KEY}`, { method: 'POST', body: form });
+    const json = await res.json();
+    if (!json.success) throw new Error(json.error?.message || 'Upload failed');
+    const photoURL = json.data.url;
+
+    // Save to Firebase
+    await update(ref(db, `users/${CU.uid}`), { photoURL });
+
+    // Update all visible displays immediately
+    const imgTag = `<img src="${photoURL}" class="av-img" alt="">`;
+    el('spav').innerHTML  = imgTag;
+    el('myav').innerHTML  = imgTag + `<div class="sd"></div>`;
+
+    // Update contact list item for this user (if contact sees us)
+    toast('✅ Profile photo updated!');
+  } catch (err) {
+    console.error(err);
+    toast('❌ Upload failed: ' + err.message);
+  }
 };
 
 async function uploadImageFile(file, viewOnce) {

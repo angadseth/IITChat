@@ -406,11 +406,18 @@
     <h3>⚙️ Settings</h3>
     <div class="fg" style="margin-bottom:20px">
       <label>Profile</label>
-      <div style="display:flex;align-items:center;gap:10px;margin-top:8px">
-        <div style="font-size:34px" id="spav"></div>
+      <div style="display:flex;align-items:center;gap:14px;margin-top:10px">
+        <div class="spav-wrap" onclick="document.getElementById('pfp-input').click()" title="Change photo">
+          <div id="spav" class="spav-inner"></div>
+          <div class="spav-cam">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+          </div>
+        </div>
+        <input type="file" id="pfp-input" accept="image/*" style="display:none" onchange="uploadProfilePic(this.files[0]);this.value=''">
         <div>
           <div style="font-weight:600" id="spnm"></div>
           <div style="font-size:11px;color:var(--text2)" id="spem"></div>
+          <div style="font-size:10px;color:var(--text3);margin-top:3px">Tap photo to change</div>
         </div>
       </div>
     </div>

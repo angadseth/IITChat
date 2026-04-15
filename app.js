@@ -1555,25 +1555,27 @@ function onYTReady(e) {
       if (shouldPlay) e.target.playVideo();
       else e.target.pauseVideo();
     } catch (_) {}
-    // Keep mpSyncing true until the resulting onYTState event is absorbed
-    setTimeout(() => { mpSyncing = false; }, 700);
+    // Keep mpSyncing true long enough to absorb buffering → playing state chain
+    setTimeout(() => { mpSyncing = false; }, 1800);
   }, 300);
 }
 
+let mpLastStatePush = 0;  // debounce — don't push more than once per 1.5s
 function onYTState(e) {
-  // Only blocked when we're mid-applying a remote seek (to stop echo)
   if (mpSyncing || !CCI) return;
+  const now = Date.now();
+  // Debounce: ignore rapid state changes (buffering → playing etc.)
+  if (now - mpLastStatePush < 1500) return;
   const path = musicPath();
-  const now  = Date.now();
   if (e.data === YT.PlayerState.PLAYING) {
     const ct = ytPlayer.getCurrentTime() || 0;
     mpLastFB = { ...(mpLastFB || {}), playing: true,  seekedTo: ct, seekedAt: now, by: CU.uid };
-    mpLastSeekedAt = now;
+    mpLastSeekedAt = now; mpLastStatePush = now;
     update(ref(db, path), { playing: true,  seekedTo: ct, seekedAt: now, by: CU.uid });
   } else if (e.data === YT.PlayerState.PAUSED) {
     const ct = ytPlayer.getCurrentTime() || 0;
     mpLastFB = { ...(mpLastFB || {}), playing: false, seekedTo: ct, seekedAt: now, by: CU.uid };
-    mpLastSeekedAt = now;
+    mpLastSeekedAt = now; mpLastStatePush = now;
     update(ref(db, path), { playing: false, seekedTo: ct, seekedAt: now, by: CU.uid });
   }
 }
@@ -1609,18 +1611,21 @@ function startSeekPoll() {
     if (!ytPlayer || !CCI || mpSyncing || !mpLastFB) return;
     if (typeof ytPlayer.getPlayerState !== 'function') return;
     const state = ytPlayer.getPlayerState();
-    // Only check when playing — paused drift handled by onYTState
     if (state !== YT.PlayerState.PLAYING) return;
 
-    const ct      = ytPlayer.getCurrentTime();
-    const elapsed = (Date.now() - mpLastFB.seekedAt) / 1000;
-    const expected = (mpLastFB.seekedTo || 0) + (mpLastFB.playing ? elapsed : 0);
+    // ── Only the owner (last person to touch video) pushes drift ──
+    // Receiver just follows — prevents ping-pong sync loop
+    if (mpLastFB.by !== CU?.uid) return;
 
-    if (Math.abs(ct - expected) > 2) {
-      // Position drifted — user scrubbed. Push to Firebase.
+    const ct       = ytPlayer.getCurrentTime();
+    const elapsed  = (Date.now() - mpLastFB.seekedAt) / 1000;
+    const expected = (mpLastFB.seekedTo || 0) + elapsed;
+
+    if (Math.abs(ct - expected) > 3) {
       const now = Date.now();
+      if (now - mpLastStatePush < 1500) return; // debounce
       mpLastFB = { ...mpLastFB, seekedTo: ct, seekedAt: now, playing: true, by: CU.uid };
-      mpLastSeekedAt = now;
+      mpLastSeekedAt = now; mpLastStatePush = now;
       update(ref(db, musicPath()), { seekedTo: ct, seekedAt: now, playing: true, by: CU.uid });
     }
   }, 600);
@@ -1636,8 +1641,7 @@ function applyRemoteSeek(m) {
       if (m.playing) ytPlayer?.playVideo?.();
       else ytPlayer?.pauseVideo?.();
     } catch (_) {}
-    // Delay clearing mpSyncing until AFTER the resulting onYTState fires and is absorbed
-    setTimeout(() => { mpSyncing = false; }, 700);
+    setTimeout(() => { mpSyncing = false; }, 1800);
   }, 250);
 }
 

@@ -765,42 +765,57 @@ body {
 .lb-x:hover { background: rgba(255,255,255,0.25); }
 
 /* ── LIVE REACTIONS ── */
+/* ── LIVE REACTION PANEL — floating, auto-orient ── */
 .lrp {
   position: fixed;
   background: var(--bg2); border: 1px solid var(--border);
   border-radius: 16px; z-index: 200;
   box-shadow: var(--shadow); animation: pI 0.18s ease;
-  display: flex; flex-direction: column; overflow: hidden;
-  min-width: 280px;
+  display: flex; flex-direction: column; overflow: visible;
 }
-.lrp-header {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 8px 10px 7px 12px;
-  border-bottom: 1px solid var(--border);
-  cursor: grab; user-select: none;
+/* Drag handle strip at top */
+.lrp-handle {
+  display: flex; align-items: center; justify-content: center;
+  padding: 5px 0 3px; cursor: grab; user-select: none;
+  border-radius: 16px 16px 0 0;
 }
-.lrp-header:active { cursor: grabbing; }
-.lrp-grip {
-  font-size: 12px; font-weight: 600; color: var(--text2);
-  display: flex; align-items: center; gap: 6px;
+.lrp-handle:active { cursor: grabbing; }
+.lrp-handle-dots {
+  width: 28px; height: 4px; border-radius: 2px;
+  background: var(--border);
 }
-.lrp-grip svg { width: 14px; height: 14px; opacity: 0.5; }
-.lrp-emojis {
-  display: flex; gap: 6px; padding: 10px 14px; flex-wrap: wrap;
-}
-.lre {
-  font-size: 28px; cursor: pointer;
-  transition: transform 0.15s; display: inline-block;
+/* Close button — absolutely positioned, not in drag zone */
+.lrp-close {
+  position: absolute; top: -8px; right: -8px;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: var(--bg3); border: 1px solid var(--border);
+  color: var(--text2); font-size: 11px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: var(--tr); z-index: 1;
   line-height: 1;
 }
-.lre:hover { transform: scale(1.4); }
-.lrx {
-  font-size: 14px; cursor: pointer; color: var(--text2);
-  padding: 2px 6px; border-radius: 50%; background: var(--bg3);
-  display: flex; align-items: center; justify-content: center;
-  transition: var(--tr); flex-shrink: 0;
+.lrp-close:hover { background: var(--red); color: #fff; border-color: var(--red); }
+/* Emoji grid — horizontal by default */
+.lrp-emojis {
+  display: flex; flex-direction: row;
+  flex-wrap: wrap; gap: 2px;
+  padding: 6px 8px 8px;
+  max-width: 220px; /* wraps to 2 rows ~6-7 per row */
+  border-radius: 0 0 16px 16px;
 }
-.lrx:hover { background: var(--red); color: #fff; }
+/* Vertical mode — auto when near screen edges */
+.lrp.lrp-vert .lrp-emojis {
+  flex-direction: column;
+  max-width: 48px; padding: 4px 6px 8px;
+}
+.lre {
+  width: 34px; height: 34px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; cursor: pointer; border-radius: 8px;
+  transition: transform 0.12s, background 0.12s;
+  flex-shrink: 0;
+}
+.lre:hover { transform: scale(1.35); background: var(--bg3); }
 
 .rcanvas {
   position: absolute; inset: 0;

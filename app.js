@@ -1015,31 +1015,60 @@ window.addGIMembers = async () => {
 // ═══════════════════════════════════════
 const LIVE_REACTS = ['🫂','🥰','😘','😁','😭','😂','🤣','🌚','😱','🥺','🥲','💋','😛'];
 
-// Drag for lrp uses delegation (survives innerHTML rebuilds)
-makeDraggable(el('lrp'), el('lrp'), '.lrp-header');
+// ── LRP custom drag (with auto-orient near screen edges) ──
+{
+  const lrp = el('lrp');
+  let drag = null;
+  lrp.addEventListener('mousedown', e => {
+    if (!e.target.closest('.lrp-handle')) return;
+    const r = lrp.getBoundingClientRect();
+    drag = { ox: e.clientX - r.left, oy: e.clientY - r.top };
+    lrp.style.transition = 'none';
+    e.preventDefault();
+  });
+  lrp.addEventListener('touchstart', e => {
+    if (!e.target.closest('.lrp-handle')) return;
+    const r = lrp.getBoundingClientRect();
+    const t = e.touches[0];
+    drag = { ox: t.clientX - r.left, oy: t.clientY - r.top };
+    lrp.style.transition = 'none';
+    e.preventDefault();
+  }, { passive: false });
+  const onMove = e => {
+    if (!drag) return;
+    const pt = e.touches?.[0] || e;
+    const x = Math.max(0, Math.min(pt.clientX - drag.ox, window.innerWidth  - lrp.offsetWidth));
+    const y = Math.max(0, Math.min(pt.clientY - drag.oy, window.innerHeight - lrp.offsetHeight));
+    lrp.style.left = x + 'px'; lrp.style.top = y + 'px';
+    lrp.style.right = 'auto'; lrp.style.bottom = 'auto';
+    // Auto-orient: vertical strip when near left/right edge
+    const nearEdge = x < 90 || x + lrp.offsetWidth > window.innerWidth - 90;
+    lrp.classList.toggle('lrp-vert', nearEdge);
+  };
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('touchmove', onMove, { passive: false });
+  document.addEventListener('mouseup',  () => { drag = null; });
+  document.addEventListener('touchend', () => { drag = null; });
+}
 
 window.toggleLRP = () => {
   const lrp = el('lrp');
   if (lrp.classList.contains('hidden')) {
     lrp.innerHTML = `
-      <div class="lrp-header">
-        <span class="lrp-grip"><svg viewBox="0 0 16 16" fill="currentColor"><circle cx="5" cy="4" r="1.2"/><circle cx="11" cy="4" r="1.2"/><circle cx="5" cy="8" r="1.2"/><circle cx="11" cy="8" r="1.2"/><circle cx="5" cy="12" r="1.2"/><circle cx="11" cy="12" r="1.2"/></svg>React</span>
-        <span class="lrx" onclick="el('lrp').classList.add('hidden')" title="Close">✕</span>
-      </div>
+      <div class="lrp-handle"><div class="lrp-handle-dots"></div></div>
+      <button class="lrp-close" onclick="el('lrp').classList.add('hidden')" title="Close">✕</button>
       <div class="lrp-emojis">
         ${LIVE_REACTS.map(r => `<span class="lre" onclick="sendLiveReact('${r}')">${r}</span>`).join('')}
       </div>`;
     lrp.classList.remove('hidden');
-    // Position near the ❤️ button on first open only
     if (!lrp.style.left) {
       requestAnimationFrame(() => {
         const btn = el('lrb');
         const br  = btn.getBoundingClientRect();
-        const pw  = lrp.offsetWidth || 300;
+        const pw  = lrp.offsetWidth || 240;
         lrp.style.left   = Math.max(10, br.right - pw) + 'px';
         lrp.style.top    = (br.bottom + 10) + 'px';
-        lrp.style.right  = 'auto';
-        lrp.style.bottom = 'auto';
+        lrp.style.right  = 'auto'; lrp.style.bottom = 'auto';
       });
     }
   } else {

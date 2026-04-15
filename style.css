@@ -865,11 +865,11 @@ body {
 }
 .site-footer strong { color: var(--text2); font-weight: 500; }
 
-/* ── SHARED MUSIC PANEL — floating draggable ── */
+/* ── SHARED MUSIC PANEL — floating draggable + resizable ── */
 .music-panel {
   position: fixed;
   right: 20px; bottom: 80px;
-  width: 320px;
+  width: 320px; min-width: 240px; max-width: 520px;
   background: var(--bg2);
   border: 1px solid var(--border);
   border-radius: 16px;
@@ -877,8 +877,25 @@ body {
   z-index: 120;
   display: flex; flex-direction: column;
   overflow: hidden;
-  max-height: calc(100vh - 100px);
+  min-height: 120px; max-height: calc(100vh - 80px);
 }
+/* Resize handle — bottom-right corner */
+.mp-resize {
+  position: absolute; bottom: 0; right: 0;
+  width: 18px; height: 18px;
+  cursor: se-resize;
+  z-index: 10;
+}
+.mp-resize::after {
+  content: '';
+  position: absolute; bottom: 4px; right: 4px;
+  width: 8px; height: 8px;
+  border-right: 2px solid var(--text3);
+  border-bottom: 2px solid var(--text3);
+  border-radius: 0 0 3px 0;
+  opacity: 0.5; transition: opacity 0.15s;
+}
+.mp-resize:hover::after { opacity: 1; }
 .mp-header {
   display: flex; align-items: center; justify-content: space-between;
   padding: 11px 14px 9px;

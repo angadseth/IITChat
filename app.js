@@ -1368,6 +1368,37 @@ window.toggleMusic = function () {
   if (mpOpen) {
     if (!mpDragInited) {
       makeDraggable(panel, panel.querySelector('.mp-header'));
+      // Resize from bottom-right corner
+      const rh = el('mp-resize');
+      let rsz = null;
+      rh.addEventListener('mousedown', e => {
+        const r = panel.getBoundingClientRect();
+        rsz = { startX: e.clientX, startY: e.clientY, startW: r.width, startH: r.height };
+        e.preventDefault(); e.stopPropagation();
+      });
+      rh.addEventListener('touchstart', e => {
+        const r = panel.getBoundingClientRect();
+        const t = e.touches[0];
+        rsz = { startX: t.clientX, startY: t.clientY, startW: r.width, startH: r.height };
+        e.preventDefault(); e.stopPropagation();
+      }, { passive: false });
+      document.addEventListener('mousemove', e => {
+        if (!rsz) return;
+        const w = Math.min(520, Math.max(240, rsz.startW + e.clientX - rsz.startX));
+        const h = Math.min(window.innerHeight - 80, Math.max(120, rsz.startH + e.clientY - rsz.startY));
+        panel.style.width  = w + 'px';
+        panel.style.height = h + 'px';
+      });
+      document.addEventListener('touchmove', e => {
+        if (!rsz) return;
+        const t = e.touches[0];
+        const w = Math.min(520, Math.max(240, rsz.startW + t.clientX - rsz.startX));
+        const h = Math.min(window.innerHeight - 80, Math.max(120, rsz.startH + t.clientY - rsz.startY));
+        panel.style.width  = w + 'px';
+        panel.style.height = h + 'px';
+      }, { passive: false });
+      document.addEventListener('mouseup',  () => { rsz = null; });
+      document.addEventListener('touchend', () => { rsz = null; });
       mpDragInited = true;
     }
     // Position near the music button on first open

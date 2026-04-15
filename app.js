@@ -85,6 +85,8 @@ function makeDraggable(panel, handle, delegateSel) {
   let drag = null;
   const onDown = e => {
     if (delegateSel && !e.target.closest(delegateSel)) return;
+    // Don't capture clicks on interactive children (close btn, emojis, inputs)
+    if (e.target.closest('button,.lrx,.lre,input,a')) return;
     const pt = e.touches?.[0] || e;
     const r  = panel.getBoundingClientRect();
     drag = { ox: pt.clientX - r.left, oy: pt.clientY - r.top };
@@ -1336,7 +1338,7 @@ window.toggleMusic = function () {
   panel.classList.toggle('hidden', !mpOpen);
   if (mpOpen) {
     if (!mpDragInited) {
-      makeDraggable(panel, el('mp-header'));
+      makeDraggable(panel, panel.querySelector('.mp-header'));
       mpDragInited = true;
     }
     // Position near the music button on first open

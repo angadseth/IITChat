@@ -513,8 +513,10 @@ function emojiOnlyCount(text) {
 function mkBody(msg, isMe) {
   if (msg.type === 'text') {
     const ec = emojiOnlyCount(msg.text);
-    if (ec === 1) return `<span class="emoji-xl">${escHtml(msg.text)}</span>`;
+    if (ec === 1)            return `<span class="emoji-xl">${escHtml(msg.text)}</span>`;
     if (ec >= 2 && ec <= 3) return `<span class="emoji-lg">${escHtml(msg.text)}</span>`;
+    if (ec >= 4 && ec <= 6) return `<span class="emoji-md">${escHtml(msg.text)}</span>`;
+    if (ec > 6)             return `<span class="emoji-sm">${escHtml(msg.text)}</span>`;
     return escHtml(msg.text).replace(/\n/g, '<br>');
   }
   if (msg.type === 'image') {

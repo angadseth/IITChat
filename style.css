@@ -13,8 +13,10 @@
   --text: #e8e8f0;
   --text2: #9090b0;
   --text3: #5a5a7a;
-  --bubble-me: linear-gradient(135deg, #6c63ff, #a855f7);
-  --bubble-them: #1e1e35;
+  --bubble-me:   rgba(108, 99, 255, 0.18);
+  --bubble-them: rgba(52, 211, 120, 0.10);
+  --bubble-me-border:   rgba(108, 99, 255, 0.28);
+  --bubble-them-border: rgba(52, 211, 120, 0.18);
   --shadow: 0 8px 32px rgba(0,0,0,0.4);
   --online: #43e97b;
   --offline: #5a5a7a;
@@ -30,7 +32,10 @@
   --text: #1a1a2e;
   --text2: #5a5a80;
   --text3: #9090b0;
-  --bubble-them: #e0e0f0;
+  --bubble-me:   rgba(108, 99, 255, 0.13);
+  --bubble-them: rgba(52, 211, 120, 0.10);
+  --bubble-me-border:   rgba(108, 99, 255, 0.22);
+  --bubble-them-border: rgba(52, 211, 120, 0.22);
   --shadow: 0 8px 32px rgba(108,99,255,0.12);
 }
 
@@ -44,8 +49,10 @@
   --text: #ffe8ee;
   --text2: #e8a0b0;
   --text3: #9a5060;
-  --bubble-me: linear-gradient(135deg, #ff6584, #ff8fa3);
-  --bubble-them: #2e1020;
+  --bubble-me:   rgba(255, 101, 132, 0.18);
+  --bubble-them: rgba(255, 179, 71, 0.10);
+  --bubble-me-border:   rgba(255, 101, 132, 0.28);
+  --bubble-them-border: rgba(255, 179, 71, 0.20);
   --online: #ffb347;
 }
 
@@ -59,8 +66,10 @@
   --text: #e0fff8;
   --text2: #80c8b8;
   --text3: #406858;
-  --bubble-me: linear-gradient(135deg, #00ffc8, #0088ff);
-  --bubble-them: #0a1a15;
+  --bubble-me:   rgba(0, 255, 200, 0.14);
+  --bubble-them: rgba(0, 200, 255, 0.08);
+  --bubble-me-border:   rgba(0, 255, 200, 0.25);
+  --bubble-them-border: rgba(0, 200, 255, 0.18);
   --online: #00ffc8;
 }
 
@@ -111,7 +120,7 @@ body {
 .alogo { display: flex; align-items: center; gap: 12px; justify-content: center; margin-bottom: 32px; }
 .ali {
   width: 50px; height: 50px;
-  background: var(--bubble-me);
+  background: var(--accent);
   border-radius: 15px;
   display: flex; align-items: center; justify-content: center;
   font-size: 22px;
@@ -162,7 +171,7 @@ body {
 
 .btnp {
   width: 100%; padding: 14px;
-  background: var(--bubble-me); border: none;
+  background: var(--accent); border: none;
   border-radius: 11px; color: #fff;
   font-family: 'Sora', sans-serif; font-size: 14px; font-weight: 600;
   cursor: pointer; transition: var(--tr); margin-top: 6px;
@@ -473,12 +482,14 @@ body {
 }
 .bub:hover { filter: brightness(1.08); }
 .mr.me .bub {
-  background: var(--bubble-me); color: #fff;
+  background: var(--bubble-me); color: var(--text);
   border-bottom-right-radius: 4px;
+  border: 1px solid var(--bubble-me-border, rgba(108,99,255,0.25));
 }
 .mr.them .bub {
   background: var(--bubble-them); color: var(--text);
-  border-bottom-left-radius: 4px; border: 1px solid var(--border);
+  border-bottom-left-radius: 4px;
+  border: 1px solid var(--bubble-them-border, rgba(52,211,120,0.15));
 }
 .mr.me.con .bub { border-top-right-radius: 5px; }
 .mr.them.con .bub { border-top-left-radius: 5px; }
@@ -591,7 +602,7 @@ body {
 
 .snd {
   width: 44px; height: 44px; border-radius: 13px; border: none;
-  background: var(--bubble-me); color: #fff; cursor: pointer;
+  background: var(--accent); color: #fff; cursor: pointer;
   font-size: 15px; display: flex; align-items: center; justify-content: center;
   transition: var(--tr); flex-shrink: 0;
   box-shadow: 0 4px 14px rgba(108,99,255,0.35);

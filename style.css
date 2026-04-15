@@ -431,6 +431,26 @@ body {
 
 .mr { display: flex; gap: 8px; margin-bottom: 1px; animation: mI 0.22s ease; }
 @keyframes mI { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+@keyframes emojiBounce {
+  0%   { transform: scale(0.3) rotate(-10deg); opacity:0; }
+  55%  { transform: scale(1.25) rotate(4deg);  opacity:1; }
+  75%  { transform: scale(0.92) rotate(-2deg); }
+  100% { transform: scale(1) rotate(0);        }
+}
+.emoji-xl {
+  font-size: 56px; line-height: 1.1; display: block;
+  animation: emojiBounce 0.42s cubic-bezier(0.34,1.56,0.64,1) both;
+}
+.emoji-lg {
+  font-size: 34px; line-height: 1.2; display: block;
+  animation: emojiBounce 0.35s cubic-bezier(0.34,1.56,0.64,1) both;
+}
+/* No bubble background for emoji-only messages */
+.bub:has(.emoji-xl), .bub:has(.emoji-lg) {
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 2px 6px;
+}
 .mr.me { flex-direction: row-reverse; }
 
 .mav {
@@ -655,37 +675,35 @@ body {
 
 /* ── REPLY QUOTE (inside bubble) ── */
 .rp-quote {
-  background: rgba(255,255,255,0.07);
   border-left: 3px solid var(--accent);
-  border-radius: 7px; padding: 6px 10px;
-  margin-bottom: 8px; cursor: pointer;
+  border-radius: 0 7px 7px 0;
+  padding: 5px 10px 5px 9px;
+  margin-bottom: 7px; cursor: pointer;
   transition: background 0.15s;
   max-width: 100%; overflow: hidden;
-  position: relative;
+  background: rgba(0,0,0,0.18);
 }
-.rp-quote::before {
-  content: '';
-  position: absolute; inset: 0; left: 3px;
-  background: linear-gradient(90deg, rgba(108,99,255,0.08) 0%, transparent 60%);
-  border-radius: 0 7px 7px 0; pointer-events: none;
-}
-.mr.me .rp-quote { background: rgba(0,0,0,0.18); }
-.mr.me .rp-quote::before { background: linear-gradient(90deg, rgba(0,0,0,0.12) 0%, transparent 60%); }
-.rp-quote:hover   { background: rgba(255,255,255,0.13); }
+.mr.them .rp-quote { background: rgba(255,255,255,0.08); }
+.rp-quote:hover { filter: brightness(1.15); }
+/* "Replying to NAME" header row */
 .rp-qname {
-  font-size: 11px; font-weight: 700; color: var(--accent);
+  font-size: 10px; font-weight: 700;
+  color: var(--accent); letter-spacing: .3px;
   margin-bottom: 3px; display: flex; align-items: center; gap: 4px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.rp-qname svg { width: 11px; height: 11px; flex-shrink: 0; opacity: 0.85; }
+.rp-qname svg { width: 10px; height: 10px; flex-shrink: 0; opacity: 0.9; }
+.rp-qlabel { opacity: .7; font-weight: 400; font-size: 9px; }
+/* Quoted text */
 .rp-qtext {
   font-size: 12px; color: var(--text2);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  max-width: 100%;
+  max-width: 100%; font-style: italic;
 }
+/* Separator between quote and actual message */
 .rp-qdivider {
-  height: 1px; background: rgba(255,255,255,0.07);
-  margin: 7px 0 6px; width: 100%;
+  height: 1px; background: rgba(255,255,255,0.09);
+  margin: 6px -14px 6px; /* bleed full bubble width */
 }
 
 /* ── SCROLL HIGHLIGHT ── */
@@ -964,8 +982,9 @@ body {
 
 /* Results */
 .mp-results {
-  overflow-y: auto; flex: 1; min-height: 80px; padding: 3px 0;
+  overflow-y: auto; flex: 1; min-height: 0; padding: 3px 0;
 }
+.mp-results:empty { display: none; }
 .mp-results::-webkit-scrollbar { width: 3px; }
 .mp-results::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 .mp-loading {

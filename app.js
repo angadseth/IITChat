@@ -503,8 +503,20 @@ window.scrollToBottom = function () {
 // Attach scroll listener once
 el('ma').addEventListener('scroll', checkScrollBtn);
 
+function emojiOnlyCount(text) {
+  if (!text?.trim()) return 0;
+  const noEmoji = text.replace(/\p{Emoji_Presentation}|\p{Extended_Pictographic}|\uFE0F|\u200D|[\u{1F3FB}-\u{1F3FF}]/gu, '').trim();
+  if (noEmoji.length > 0) return 0;
+  return [...text.matchAll(/\p{Emoji_Presentation}|\p{Extended_Pictographic}/gu)].length;
+}
+
 function mkBody(msg, isMe) {
-  if (msg.type === 'text') return escHtml(msg.text).replace(/\n/g, '<br>');
+  if (msg.type === 'text') {
+    const ec = emojiOnlyCount(msg.text);
+    if (ec === 1) return `<span class="emoji-xl">${escHtml(msg.text)}</span>`;
+    if (ec <= 3)  return `<span class="emoji-lg">${escHtml(msg.text)}</span>`;
+    return escHtml(msg.text).replace(/\n/g, '<br>');
+  }
   if (msg.type === 'image') {
     if (msg.viewOnce) {
       const viewed = msg.viewedBy?.[CU.uid];
@@ -541,7 +553,10 @@ function mkMsg(msg, isMe, con) {
 
   const replyHtml = msg.replyTo ? `
     <div class="rp-quote" onclick="scrollToMsg('${msg.replyTo.id}')">
-      <div class="rp-qname"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 5.5l3-3v2c3 0 5.5 1.5 6 5.5-1.5-2.5-3-3.5-6-3.5v2L1 5.5z"/></svg>${escHtml(msg.replyTo.senderName)}</div>
+      <div class="rp-qname">
+        <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 5.5l3-3v2c3 0 5.5 1.5 6 5.5-1.5-2.5-3-3.5-6-3.5v2L1 5.5z"/></svg>
+        <span class="rp-qlabel">Replying to</span>&nbsp;${escHtml(msg.replyTo.senderName)}
+      </div>
       <div class="rp-qtext">${escHtml(msg.replyTo.text).substring(0, 100)}</div>
     </div><div class="rp-qdivider"></div>` : '';
 
@@ -1052,12 +1067,13 @@ const LIVE_REACTS = ['🫂','🥰','😘','😁','😭','😂','🤣','🌚','�
   document.addEventListener('touchend', () => { drag = null; });
 }
 
+window.closeLRP = () => { el('lrp').classList.add('hidden'); };
 window.toggleLRP = () => {
   const lrp = el('lrp');
   if (lrp.classList.contains('hidden')) {
     lrp.innerHTML = `
       <div class="lrp-handle"><div class="lrp-handle-dots"></div></div>
-      <button class="lrp-close" onclick="el('lrp').classList.add('hidden')" title="Close">✕</button>
+      <button class="lrp-close" onclick="closeLRP()" title="Close">✕</button>
       <div class="lrp-emojis">
         ${LIVE_REACTS.map(r => `<span class="lre" onclick="sendLiveReact('${r}')">${r}</span>`).join('')}
       </div>`;

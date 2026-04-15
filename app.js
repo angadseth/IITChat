@@ -1368,28 +1368,46 @@ window.toggleMusic = function () {
   if (mpOpen) {
     if (!mpDragInited) {
       makeDraggable(panel, panel.querySelector('.mp-header'));
-      // ── Scale entire panel (zoom — video + text + everything scales together) ──
-      const rh = el('mp-resize');
+      // ── 8-direction resize ──
+      const MIN_W = 220, MIN_H = 120;
       let rsz = null;
-      let mpZoom = 1;
-      const applyZoom = z => {
-        mpZoom = Math.min(2, Math.max(0.55, z));
-        panel.style.zoom = mpZoom;
-      };
-      rh.addEventListener('mousedown', e => {
-        rsz = { startX: e.clientX, startY: e.clientY, startZoom: mpZoom };
-        e.preventDefault(); e.stopPropagation();
+      panel.querySelectorAll('.mp-rs').forEach(handle => {
+        const onRszDown = e => {
+          const r   = panel.getBoundingClientRect();
+          const pt  = e.touches?.[0] || e;
+          rsz = {
+            d: handle.dataset.d,
+            startX: pt.clientX, startY: pt.clientY,
+            startL: r.left,     startT: r.top,
+            startW: r.width,    startH: r.height
+          };
+          e.preventDefault(); e.stopPropagation();
+        };
+        handle.addEventListener('mousedown',  onRszDown);
+        handle.addEventListener('touchstart', onRszDown, { passive: false });
       });
-      rh.addEventListener('touchstart', e => {
-        const t = e.touches[0];
-        rsz = { startX: t.clientX, startY: t.clientY, startZoom: mpZoom };
-        e.preventDefault(); e.stopPropagation();
-      }, { passive: false });
       const onRszMove = e => {
         if (!rsz) return;
-        const pt = e.touches?.[0] || e;
-        const delta = (pt.clientX - rsz.startX + pt.clientY - rsz.startY) / 300;
-        applyZoom(rsz.startZoom + delta);
+        const pt  = e.touches?.[0] || e;
+        const dx  = pt.clientX - rsz.startX;
+        const dy  = pt.clientY - rsz.startY;
+        const vw  = window.innerWidth, vh = window.innerHeight;
+        let { startL: l, startT: t, startW: w, startH: h, d } = rsz;
+
+        if (d.includes('e')) w = Math.max(MIN_W, w + dx);
+        if (d.includes('w')) { const nw = Math.max(MIN_W, w - dx); l += w - nw; w = nw; }
+        if (d.includes('s')) h = Math.max(MIN_H, h + dy);
+        if (d.includes('n')) { const nh = Math.max(MIN_H, h - dy); t += h - nh; h = nh; }
+
+        // Clamp to viewport
+        l = Math.max(0, Math.min(l, vw - w));
+        t = Math.max(0, Math.min(t, vh - h));
+        w = Math.min(w, vw);
+        h = Math.min(h, vh);
+
+        panel.style.left   = l + 'px'; panel.style.top    = t + 'px';
+        panel.style.right  = 'auto';   panel.style.bottom = 'auto';
+        panel.style.width  = w + 'px'; panel.style.height = h + 'px';
       };
       document.addEventListener('mousemove', onRszMove);
       document.addEventListener('touchmove', onRszMove, { passive: false });
@@ -1559,7 +1577,7 @@ function mpLoadPlayer(videoId, seekOffset, seekStartedAt, shouldPlay) {
   wrap.appendChild(div);
   mpPendingSeek = { seekOffset, seekStartedAt, shouldPlay };
   ytPlayer = new YT.Player('yt-inner', {
-    height: '170', width: '100%',
+    height: '100%', width: '100%',
     videoId,
     playerVars: { autoplay: 0, controls: 1, modestbranding: 1, rel: 0, iv_load_policy: 3 },
     events: {

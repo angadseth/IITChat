@@ -1368,35 +1368,31 @@ window.toggleMusic = function () {
   if (mpOpen) {
     if (!mpDragInited) {
       makeDraggable(panel, panel.querySelector('.mp-header'));
-      // Resize from bottom-right corner
+      // ── Scale entire panel (zoom — video + text + everything scales together) ──
       const rh = el('mp-resize');
       let rsz = null;
+      let mpZoom = 1;
+      const applyZoom = z => {
+        mpZoom = Math.min(2, Math.max(0.55, z));
+        panel.style.zoom = mpZoom;
+      };
       rh.addEventListener('mousedown', e => {
-        const r = panel.getBoundingClientRect();
-        rsz = { startX: e.clientX, startY: e.clientY, startW: r.width, startH: r.height };
+        rsz = { startX: e.clientX, startY: e.clientY, startZoom: mpZoom };
         e.preventDefault(); e.stopPropagation();
       });
       rh.addEventListener('touchstart', e => {
-        const r = panel.getBoundingClientRect();
         const t = e.touches[0];
-        rsz = { startX: t.clientX, startY: t.clientY, startW: r.width, startH: r.height };
+        rsz = { startX: t.clientX, startY: t.clientY, startZoom: mpZoom };
         e.preventDefault(); e.stopPropagation();
       }, { passive: false });
-      document.addEventListener('mousemove', e => {
+      const onRszMove = e => {
         if (!rsz) return;
-        const w = Math.min(520, Math.max(240, rsz.startW + e.clientX - rsz.startX));
-        const h = Math.min(window.innerHeight - 80, Math.max(120, rsz.startH + e.clientY - rsz.startY));
-        panel.style.width  = w + 'px';
-        panel.style.height = h + 'px';
-      });
-      document.addEventListener('touchmove', e => {
-        if (!rsz) return;
-        const t = e.touches[0];
-        const w = Math.min(520, Math.max(240, rsz.startW + t.clientX - rsz.startX));
-        const h = Math.min(window.innerHeight - 80, Math.max(120, rsz.startH + t.clientY - rsz.startY));
-        panel.style.width  = w + 'px';
-        panel.style.height = h + 'px';
-      }, { passive: false });
+        const pt = e.touches?.[0] || e;
+        const delta = (pt.clientX - rsz.startX + pt.clientY - rsz.startY) / 300;
+        applyZoom(rsz.startZoom + delta);
+      };
+      document.addEventListener('mousemove', onRszMove);
+      document.addEventListener('touchmove', onRszMove, { passive: false });
       document.addEventListener('mouseup',  () => { rsz = null; });
       document.addEventListener('touchend', () => { rsz = null; });
       mpDragInited = true;

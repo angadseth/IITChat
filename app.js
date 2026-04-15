@@ -1399,11 +1399,12 @@ window.toggleMusic = function () {
         if (d.includes('s')) h = Math.max(MIN_H, h + dy);
         if (d.includes('n')) { const nh = Math.max(MIN_H, h - dy); t += h - nh; h = nh; }
 
-        // Clamp to viewport
+        // Clamp to 50% of viewport max + stay on screen
+        const maxW = Math.floor(vw * 0.5);
+        const maxH = Math.floor(vh * 0.5);
+        w = Math.min(w, maxW); h = Math.min(h, maxH);
         l = Math.max(0, Math.min(l, vw - w));
         t = Math.max(0, Math.min(t, vh - h));
-        w = Math.min(w, vw);
-        h = Math.min(h, vh);
 
         panel.style.left   = l + 'px'; panel.style.top    = t + 'px';
         panel.style.right  = 'auto';   panel.style.bottom = 'auto';
@@ -1451,6 +1452,37 @@ function extractVid(str) {
   return null;
 }
 
+// ── Instagram URL → { shortcode, type } ──
+function extractInsta(str) {
+  str = str.trim();
+  const m = str.match(/instagram\.com\/(?:p|reel|tv)\/([A-Za-z0-9_-]+)/);
+  if (!m) return null;
+  const type = str.includes('/reel/') || str.includes('/tv/') ? 'reel' : 'p';
+  return { shortcode: m[1], type };
+}
+
+window.mpPlayInsta = async function(shortcode, type, title) {
+  if (!CCI) { toast('Open a chat first'); return; }
+  const url = `https://www.instagram.com/${type}/${shortcode}/`;
+  await set(ref(db, musicPath()), {
+    mediaType: 'instagram', shortcode, instaType: type,
+    url, title: title || 'Instagram ' + (type === 'reel' ? 'Reel' : 'Post'),
+    by: CU.uid, ts: Date.now()
+  });
+  if (!mpOpen) window.toggleMusic();
+  toast('📸 Sharing Instagram ' + (type === 'reel' ? 'Reel' : 'Post') + '!');
+};
+
+function mpLoadInsta(shortcode, type) {
+  el('yt-player').innerHTML = '';
+  el('mp-player-wrap').classList.remove('hidden');
+  el('yt-player').classList.add('hidden');
+  const wrap = el('insta-player-wrap');
+  wrap.classList.remove('hidden');
+  const embedUrl = `https://www.instagram.com/${type}/${shortcode}/embed/`;
+  el('insta-frame').src = embedUrl;
+}
+
 // ── search via multiple free APIs ──
 const SEARCH_ENDPOINTS = [
   // Piped instances (return {items:[{url,title,thumbnail,uploaderName,duration}]})
@@ -1492,6 +1524,14 @@ function normaliseInvidious(data) {
 window.mpSearch = async function () {
   const raw = el('mp-search-inp').value.trim();
   if (!raw) return;
+
+  // Instagram link → share directly
+  const insta = extractInsta(raw);
+  if (insta) {
+    window.mpPlayInsta(insta.shortcode, insta.type);
+    el('mp-search-inp').value = '';
+    return;
+  }
 
   // If user pasted a YouTube URL → play directly
   const directVid = extractVid(raw);
@@ -1637,14 +1677,23 @@ window.mpStop = async function () {
   if (ytPlayer && typeof ytPlayer.stopVideo === 'function') ytPlayer.stopVideo();
   el('mp-player-wrap').classList.add('hidden');
   el('mp-now-title').textContent = '';
+  el('insta-frame').src = '';
+  el('insta-player-wrap').classList.add('hidden');
+  el('yt-player').classList.remove('hidden');
   lastVid = null;
 };
 
 function renderNowPlaying(m) {
   el('mp-now-title').textContent = m.title || 'Now Playing';
-  const thumb = m.thumbnail || `https://img.youtube.com/vi/${m.videoId}/mqdefault.jpg`;
-  el('mp-np-thumb').src = thumb;
-  el('mp-np-thumb').onerror = () => { el('mp-np-thumb').src = `https://img.youtube.com/vi/${m.videoId}/mqdefault.jpg`; };
+  if (m.mediaType === 'instagram') {
+    el('mp-np-thumb').src = '';
+    el('mp-np-thumb').style.display = 'none';
+  } else {
+    el('mp-np-thumb').style.display = '';
+    const thumb = m.thumbnail || `https://img.youtube.com/vi/${m.videoId}/mqdefault.jpg`;
+    el('mp-np-thumb').src = thumb;
+    el('mp-np-thumb').onerror = () => { el('mp-np-thumb').src = `https://img.youtube.com/vi/${m.videoId}/mqdefault.jpg`; };
+  }
   el('mp-player-wrap').classList.remove('hidden');
   if (!mpOpen) window.toggleMusic();
 }
@@ -1712,10 +1761,22 @@ function startMusicSync(chatId) {
     mpLastFB = m;
     renderNowPlaying(m);
 
+    // ── Instagram embed (no seek sync — just show) ──
+    if (m.mediaType === 'instagram') {
+      const key = m.shortcode + m.instaType;
+      if (key !== lastVid) {
+        lastVid = key;
+        mpLoadInsta(m.shortcode, m.instaType || 'p');
+      }
+      return;
+    }
+
+    // ── YouTube ──
+    el('insta-player-wrap')?.classList.add('hidden');
+    el('yt-player').classList.remove('hidden');
     const fromMe = m.by === CU?.uid;
 
     if (m.videoId !== lastVid) {
-      // ── New song (always load regardless of who started it) ──
       lastVid = m.videoId;
       mpLastSeekedAt = m.seekedAt;
       mpSyncing = true;
@@ -1723,12 +1784,10 @@ function startMusicSync(chatId) {
       setTimeout(startSeekPoll, 2500);
 
     } else if (!fromMe && m.seekedAt !== mpLastSeekedAt) {
-      // ── Other person scrubbed or changed play state ──
       mpLastSeekedAt = m.seekedAt;
       applyRemoteSeek(m);
 
     } else if (fromMe) {
-      // ── Our own echo — just keep mpLastFB fresh, do nothing ──
       mpLastSeekedAt = m.seekedAt;
     }
     // (no else needed — play/pause is handled inside applyRemoteSeek + onYTState)

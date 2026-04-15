@@ -870,13 +870,19 @@ body {
   position: fixed;
   right: 20px; bottom: 80px;
   width: 320px; min-width: 220px;
-  background: var(--bg2);
-  border: 1px solid var(--border);
+  max-width: 50vw; max-height: 50vh;
+  background: transparent;
   border-radius: 16px;
   box-shadow: var(--shadow);
   z-index: 120;
   display: flex; flex-direction: column;
-  overflow: hidden;
+  overflow: visible; /* handles must extend outside, mp-inner clips */
+}
+/* Inner wrapper — clips rounded content */
+.mp-inner {
+  flex: 1; display: flex; flex-direction: column;
+  overflow: hidden; border-radius: 16px; min-height: 0;
+  background: var(--bg2); border: 1px solid var(--border);
 }
 /* ── 8-direction resize handles ── */
 .mp-rs {
@@ -944,6 +950,9 @@ body {
 .yt-player-box { width: 100%; aspect-ratio: 16/9; background: #000; }
 .yt-player-box iframe,
 .yt-player-box #yt-inner { display: block; width: 100% !important; height: 100% !important; }
+/* Instagram embed */
+.insta-player-box { width: 100%; aspect-ratio: 9/16; max-height: 60vh; background: #000; overflow: hidden; }
+.insta-player-box iframe { width: 100%; height: 100%; border: none; display: block; }
 .mp-stop-row { padding: 6px 10px; }
 .mp-stop-btn {
   width: 100%; background: var(--bg3); border: 1px solid var(--border);
@@ -977,7 +986,7 @@ body {
 
 /* Results */
 .mp-results {
-  overflow-y: auto; flex: 1; min-height: 0; padding: 3px 0;
+  overflow-y: auto; flex: 1; min-height: 80px; padding: 3px 0;
 }
 .mp-results::-webkit-scrollbar { width: 3px; }
 .mp-results::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }

@@ -177,34 +177,42 @@
 
         <!-- 🎵 Shared Music Panel -->
         <div class="music-panel hidden" id="music-panel">
-          <div class="mp-header">
-            <span>🎵 Shared Music</span>
-            <button class="mp-x" onclick="toggleMusic()">✕</button>
-          </div>
-          <!-- Now playing -->
-          <div class="mp-player-wrap hidden" id="mp-player-wrap">
-            <!-- Song info card -->
-            <div class="mp-np-card">
-              <img class="mp-np-thumb" id="mp-np-thumb" src="">
-              <div class="mp-np-meta">
-                <div class="mp-now-title" id="mp-now-title"></div>
+          <!-- Inner wrapper clips content, handles live outside -->
+          <div class="mp-inner">
+            <div class="mp-header">
+              <span>🎵 Shared Music</span>
+              <button class="mp-x" onclick="toggleMusic()">✕</button>
+            </div>
+            <!-- Now playing -->
+            <div class="mp-player-wrap hidden" id="mp-player-wrap">
+              <div class="mp-np-card">
+                <img class="mp-np-thumb" id="mp-np-thumb" src="">
+                <div class="mp-np-meta">
+                  <div class="mp-now-title" id="mp-now-title"></div>
+                </div>
+              </div>
+              <!-- YouTube embed -->
+              <div id="yt-player" class="yt-player-box"></div>
+              <!-- Instagram embed -->
+              <div id="insta-player-wrap" class="insta-player-box hidden">
+                <iframe id="insta-frame" src="" frameborder="0" allowfullscreen
+                  scrolling="no" allow="autoplay; clipboard-write; encrypted-media; picture-in-picture"></iframe>
+              </div>
+              <div class="mp-stop-row">
+                <button class="mp-stop-btn" onclick="mpStop()">⏹ Stop for both</button>
               </div>
             </div>
-            <!-- Embedded player -->
-            <div id="yt-player" class="yt-player-box"></div>
-            <div class="mp-stop-row">
-              <button class="mp-stop-btn" onclick="mpStop()">⏹ Stop for both</button>
+            <!-- Search -->
+            <div class="mp-search-row">
+              <input class="mp-search-inp" id="mp-search-inp"
+                placeholder="Search / YouTube / Instagram link…"
+                onkeydown="if(event.key==='Enter')mpSearch()">
+              <button class="mp-search-btn" onclick="mpSearch()"><i class="fa fa-search"></i></button>
             </div>
+            <div class="mp-hint">Paste YouTube or Instagram Reel/Post link to share instantly</div>
+            <div class="mp-results" id="mp-results"></div>
           </div>
-          <!-- Search -->
-          <div class="mp-search-row">
-            <input class="mp-search-inp" id="mp-search-inp"
-              placeholder="Search song / paste YouTube link…"
-              onkeydown="if(event.key==='Enter')mpSearch()">
-            <button class="mp-search-btn" onclick="mpSearch()"><i class="fa fa-search"></i></button>
-          </div>
-          <div class="mp-hint">Paste a YouTube / YouTube Music URL to play instantly</div>
-          <div class="mp-results" id="mp-results"></div>
+          <!-- Resize handles outside .mp-inner so they're not clipped -->
           <div class="mp-rs" data-d="n"></div>
           <div class="mp-rs" data-d="s"></div>
           <div class="mp-rs" data-d="e"></div>

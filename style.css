@@ -865,46 +865,24 @@ body {
 }
 .site-footer strong { color: var(--text2); font-weight: 500; }
 
-/* ── SHARED MUSIC PANEL — floating draggable + resizable ── */
+/* ── SHARED MUSIC PANEL — floating draggable ── */
 .music-panel {
   position: fixed;
   right: 20px; bottom: 80px;
-  width: 320px; min-width: 220px;
-  max-width: 50vw; max-height: 50vh;
-  background: transparent;
+  width: 320px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
   border-radius: 16px;
   box-shadow: var(--shadow);
   z-index: 120;
   display: flex; flex-direction: column;
-  overflow: visible; /* handles must extend outside, mp-inner clips */
+  overflow: hidden;
+  max-height: calc(100vh - 100px);
 }
-/* Inner wrapper — clips rounded content */
 .mp-inner {
-  flex: 1; display: flex; flex-direction: column;
-  overflow: hidden; border-radius: 16px; min-height: 0;
-  background: var(--bg2); border: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  flex: 1; min-height: 0; overflow: hidden;
 }
-/* ── 8-direction resize handles ── */
-.mp-rs {
-  position: absolute; z-index: 30;
-  background: transparent;
-}
-.mp-rs[data-d="n"]  { top:-4px;    left:12px;  right:12px; height:8px;  cursor:n-resize;  }
-.mp-rs[data-d="s"]  { bottom:-4px; left:12px;  right:12px; height:8px;  cursor:s-resize;  }
-.mp-rs[data-d="e"]  { right:-4px;  top:12px; bottom:12px;  width:8px;   cursor:e-resize;  }
-.mp-rs[data-d="w"]  { left:-4px;   top:12px; bottom:12px;  width:8px;   cursor:w-resize;  }
-.mp-rs[data-d="ne"] { top:-4px;    right:-4px; width:14px; height:14px; cursor:ne-resize; }
-.mp-rs[data-d="nw"] { top:-4px;    left:-4px;  width:14px; height:14px; cursor:nw-resize; }
-.mp-rs[data-d="se"] { bottom:-4px; right:-4px; width:14px; height:14px; cursor:se-resize; }
-.mp-rs[data-d="sw"] { bottom:-4px; left:-4px;  width:14px; height:14px; cursor:sw-resize; }
-/* SE corner visual dot */
-.mp-rs[data-d="se"]::after {
-  content:''; position:absolute; bottom:5px; right:5px;
-  width:7px; height:7px;
-  border-right:2px solid var(--text3); border-bottom:2px solid var(--text3);
-  border-radius:0 0 3px 0; opacity:.45; transition:opacity .15s;
-}
-.mp-rs[data-d="se"]:hover::after { opacity:1; }
 .mp-header {
   display: flex; align-items: center; justify-content: space-between;
   padding: 11px 14px 9px;

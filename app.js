@@ -77,6 +77,7 @@ let mpPendingSeek  = null;   // { seekOffset, seekStartedAt, shouldPlay } — ap
 let mpLastFB       = null;   // last Firebase music snapshot (for drift detection)
 let mpSyncInterval = null;   // seek-drift polling interval
 let mpLastSeekedAt = 0;      // tracks which seekedAt we last applied
+let mpLastVid      = null;   // currently loaded video/insta key
 
 // ── Draggable panel utility (mouse + touch, optional CSS-selector delegation) ──
 // makeDraggable(panel, handle)                — handle is direct element
@@ -1368,52 +1369,6 @@ window.toggleMusic = function () {
   if (mpOpen) {
     if (!mpDragInited) {
       makeDraggable(panel, panel.querySelector('.mp-header'));
-      // ── 8-direction resize ──
-      const MIN_W = 220, MIN_H = 120;
-      let rsz = null;
-      panel.querySelectorAll('.mp-rs').forEach(handle => {
-        const onRszDown = e => {
-          const r   = panel.getBoundingClientRect();
-          const pt  = e.touches?.[0] || e;
-          rsz = {
-            d: handle.dataset.d,
-            startX: pt.clientX, startY: pt.clientY,
-            startL: r.left,     startT: r.top,
-            startW: r.width,    startH: r.height
-          };
-          e.preventDefault(); e.stopPropagation();
-        };
-        handle.addEventListener('mousedown',  onRszDown);
-        handle.addEventListener('touchstart', onRszDown, { passive: false });
-      });
-      const onRszMove = e => {
-        if (!rsz) return;
-        const pt  = e.touches?.[0] || e;
-        const dx  = pt.clientX - rsz.startX;
-        const dy  = pt.clientY - rsz.startY;
-        const vw  = window.innerWidth, vh = window.innerHeight;
-        let { startL: l, startT: t, startW: w, startH: h, d } = rsz;
-
-        if (d.includes('e')) w = Math.max(MIN_W, w + dx);
-        if (d.includes('w')) { const nw = Math.max(MIN_W, w - dx); l += w - nw; w = nw; }
-        if (d.includes('s')) h = Math.max(MIN_H, h + dy);
-        if (d.includes('n')) { const nh = Math.max(MIN_H, h - dy); t += h - nh; h = nh; }
-
-        // Clamp to 50% of viewport max + stay on screen
-        const maxW = Math.floor(vw * 0.5);
-        const maxH = Math.floor(vh * 0.5);
-        w = Math.min(w, maxW); h = Math.min(h, maxH);
-        l = Math.max(0, Math.min(l, vw - w));
-        t = Math.max(0, Math.min(t, vh - h));
-
-        panel.style.left   = l + 'px'; panel.style.top    = t + 'px';
-        panel.style.right  = 'auto';   panel.style.bottom = 'auto';
-        panel.style.width  = w + 'px'; panel.style.height = h + 'px';
-      };
-      document.addEventListener('mousemove', onRszMove);
-      document.addEventListener('touchmove', onRszMove, { passive: false });
-      document.addEventListener('mouseup',  () => { rsz = null; });
-      document.addEventListener('touchend', () => { rsz = null; });
       mpDragInited = true;
     }
     // Position near the music button on first open
@@ -1680,7 +1635,7 @@ window.mpStop = async function () {
   el('insta-frame').src = '';
   el('insta-player-wrap').classList.add('hidden');
   el('yt-player').classList.remove('hidden');
-  lastVid = null;
+  mpLastVid = null;
 };
 
 function renderNowPlaying(m) {
@@ -1745,7 +1700,7 @@ function startMusicSync(chatId) {
   mpLastFB = null; mpLastSeekedAt = 0;
 
   const path = isGroup ? `groups/${chatId}/music` : `chats/${chatId}/music`;
-  let lastVid = null;
+  mpLastVid = null;
 
   musicUnsub = onValue(ref(db, path), snap => {
     const m = snap.val();
@@ -1753,7 +1708,7 @@ function startMusicSync(chatId) {
       el('mp-player-wrap').classList.add('hidden');
       el('mp-now-title').textContent = '';
       if (ytPlayer && typeof ytPlayer.stopVideo === 'function') ytPlayer.stopVideo();
-      lastVid = null; mpLastFB = null;
+      mpLastVid = null; mpLastFB = null;
       if (mpSyncInterval) { clearInterval(mpSyncInterval); mpSyncInterval = null; }
       return;
     }
@@ -1764,8 +1719,8 @@ function startMusicSync(chatId) {
     // ── Instagram embed (no seek sync — just show) ──
     if (m.mediaType === 'instagram') {
       const key = m.shortcode + m.instaType;
-      if (key !== lastVid) {
-        lastVid = key;
+      if (key !== mpLastVid) {
+        mpLastVid = key;
         mpLoadInsta(m.shortcode, m.instaType || 'p');
       }
       return;
@@ -1776,8 +1731,8 @@ function startMusicSync(chatId) {
     el('yt-player').classList.remove('hidden');
     const fromMe = m.by === CU?.uid;
 
-    if (m.videoId !== lastVid) {
-      lastVid = m.videoId;
+    if (m.videoId !== mpLastVid) {
+      mpLastVid = m.videoId;
       mpLastSeekedAt = m.seekedAt;
       mpSyncing = true;
       mpLoadPlayer(m.videoId, m.seekedTo || 0, m.seekedAt, m.playing);

@@ -510,11 +510,12 @@ function emojiOnlyCount(text) {
   return [...text.matchAll(/\p{Emoji_Presentation}|\p{Extended_Pictographic}/gu)].length;
 }
 
-function mkBody(msg, isMe) {
+function mkBody(msg, isMe, isNew) {
   if (msg.type === 'text') {
     const ec = emojiOnlyCount(msg.text);
-    if (ec === 1)            return `<span class="emoji-xl">${escHtml(msg.text)}</span>`;
-    if (ec >= 2 && ec <= 3) return `<span class="emoji-lg">${escHtml(msg.text)}</span>`;
+    const anim = isNew ? ' emoji-anim' : '';
+    if (ec === 1)            return `<span class="emoji-xl${anim}">${escHtml(msg.text)}</span>`;
+    if (ec >= 2 && ec <= 3) return `<span class="emoji-lg${anim}">${escHtml(msg.text)}</span>`;
     if (ec >= 4 && ec <= 6) return `<span class="emoji-md">${escHtml(msg.text)}</span>`;
     if (ec > 6)             return `<span class="emoji-sm">${escHtml(msg.text)}</span>`;
     return escHtml(msg.text).replace(/\n/g, '<br>');
@@ -548,7 +549,9 @@ function mkMsg(msg, isMe, con) {
   row.className = `mr ${isMe ? 'me' : 'them'}${con ? ' con' : ''}`;
   row.dataset.mid = msg.id;
 
-  const body    = mkBody(msg, isMe);
+  const isNew   = Date.now() - msg.ts < 5000;
+  const emojiOnly = msg.type === 'text' && emojiOnlyCount(msg.text) > 0;
+  const body    = mkBody(msg, isMe, isNew);
   const rHtml   = mkReacts(msg);
   const expLeft = THREE_DAYS - (Date.now() - msg.ts);
   const expH    = Math.max(0, Math.round(expLeft / 3_600_000));
@@ -572,7 +575,7 @@ function mkMsg(msg, isMe, con) {
     <div class="mc">
       ${!isMe && !con ? `<div class="msn">${escHtml(senderName)}</div>` : ''}
       <div class="bw">
-        <div class="bub" onclick="showRP(event,this,'${msg.id}',${isMe})">${replyHtml}${body}</div>
+        <div class="bub${emojiOnly ? ' emoji-bub' : ''}" onclick="showRP(event,this,'${msg.id}',${isMe})">${replyHtml}${body}</div>
       </div>
       ${rHtml ? `<div class="rcts">${rHtml}</div>` : ''}
       <div class="mm">

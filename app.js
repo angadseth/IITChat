@@ -711,6 +711,7 @@ window.sendMsg = async () => {
   if (!text || !CCI) return;
   inp.value = '';
   inp.style.height = 'auto';
+  vnUpdateBtn();
   const data = { type: 'text', text };
   if (replyTo) {
     data.replyTo = { id: replyTo.id, text: replyTo.text, senderName: replyTo.senderName };
@@ -806,15 +807,18 @@ async function vnDoSend(mimeType, duration) {
   if (blob.size < 500) { toast('Too short!'); return; }
   toast('⏳ Sending voice note…');
   try {
-    const ext  = mimeType.includes('ogg') ? 'ogg' : 'webm';
-    const path = `voices/${CCI}/${Date.now()}_${CU.uid}.${ext}`;
-    const snap = await uploadBytes(sRef(storage, path), blob, { contentType: mimeType });
-    const url  = await getDownloadURL(snap.ref);
+    // convert to base64 data URL — no Storage setup needed
+    const url = await new Promise((res, rej) => {
+      const reader = new FileReader();
+      reader.onload  = () => res(reader.result);
+      reader.onerror = rej;
+      reader.readAsDataURL(blob);
+    });
     await sendData({ type: 'audio', url, duration });
     toast('✅ Voice note sent!');
   } catch (err) {
-    console.error('Voice upload error:', err);
-    toast('❌ Upload failed: ' + (err.code || err.message));
+    console.error('Voice send error:', err);
+    toast('❌ Failed to send voice note');
   }
 }
 

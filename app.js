@@ -1083,6 +1083,8 @@ window.toggleLRP = () => {
         ${LIVE_REACTS.map(r => `<span class="lre" onclick="sendLiveReact('${r}')">${r}</span>`).join('')}
       </div>`;
     lrp.classList.remove('hidden');
+    // prevent focus steal on click
+    lrp.addEventListener('mousedown', e => e.preventDefault(), { capture: true });
     if (!lrp.style.left) {
       requestAnimationFrame(() => {
         const btn = el('lrb');
@@ -1101,6 +1103,7 @@ window.toggleLRP = () => {
 window.sendLiveReact = async emoji => {
   // panel band NAHI hoga — multiple reactions bhej sakte ho
   showReactionAnim(emoji);
+  el('msgi')?.focus();
   const r = await push(ref(db, `liveReactions/${CCI}`), { emoji, uid: CU.uid, ts: Date.now() });
   setTimeout(() => remove(r), 3500);
 };

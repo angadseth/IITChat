@@ -602,15 +602,27 @@ body {
 
 .snd {
   width: 44px; height: 44px; border-radius: 13px; border: none;
-  background: var(--accent); color: #fff; cursor: pointer;
+  background: linear-gradient(135deg, rgba(108,99,255,0.35) 0%, rgba(67,233,123,0.22) 100%);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: #fff; cursor: pointer;
   font-size: 15px; display: flex; align-items: center; justify-content: center;
   transition: var(--tr); flex-shrink: 0;
-  box-shadow: 0 4px 14px rgba(108,99,255,0.35);
+  box-shadow: 0 4px 18px rgba(108,99,255,0.25), inset 0 1px 0 rgba(255,255,255,0.15);
 }
-.snd:hover { transform: scale(1.08); }
+.snd:hover {
+  transform: scale(1.08);
+  background: linear-gradient(135deg, rgba(108,99,255,0.55) 0%, rgba(67,233,123,0.35) 100%);
+  box-shadow: 0 6px 22px rgba(108,99,255,0.4);
+}
 
 /* ── MIC BUTTON ── */
-.mic-btn { background: var(--accent) !important; }
+.mic-btn {
+  background: linear-gradient(135deg, rgba(108,99,255,0.35) 0%, rgba(67,233,123,0.22) 100%) !important;
+  backdrop-filter: blur(12px) !important; -webkit-backdrop-filter: blur(12px) !important;
+  border: 1px solid rgba(255,255,255,0.15) !important;
+  box-shadow: 0 4px 18px rgba(108,99,255,0.25), inset 0 1px 0 rgba(255,255,255,0.15) !important;
+}
 
 /* ── VOICE RECORDING BAR ── */
 .vn-rec-bar {

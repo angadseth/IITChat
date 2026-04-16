@@ -1780,6 +1780,17 @@ el('fi-vo').addEventListener('change',    e => handleFilePick(e, 'viewonce'));
 // ── typing listener ──
 el('msgi').addEventListener('input', onTyping);
 
+// ── Always keep msgi focused unless another input/textarea needs focus ──
+el('msgi').addEventListener('blur', () => {
+  setTimeout(() => {
+    const focused = document.activeElement;
+    const tag = focused?.tagName;
+    if (tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT' && !focused?.isContentEditable) {
+      el('msgi')?.focus();
+    }
+  }, 0);
+});
+
 // ── ESC to close lightbox ──
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') el('lb')?.classList.add('hidden');

@@ -41,9 +41,6 @@ export function initMsgMenu(getState, focusInput) {
         <button class="rpk-act" onclick="${cl}window.copyMsg('${escJ(mid)}')" title="Copy text">
           ${IC.copy}<span>Copy</span>
         </button>
-        ${isMe ? `<button class="rpk-act rpk-del" onclick="${cl}window.delMsg('${escJ(mid)}')" title="Delete">
-          ${IC.del}<span>Delete</span>
-        </button>` : ''}
       </div>
       <div class="rpk-sep"></div>
       <div class="rpk-reacts">

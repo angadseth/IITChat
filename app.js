@@ -1780,14 +1780,15 @@ el('fi-vo').addEventListener('change',    e => handleFilePick(e, 'viewonce'));
 // ── typing listener ──
 el('msgi').addEventListener('input', onTyping);
 
-// ── Always keep msgi focused unless another input/textarea needs focus ──
+// ── Always keep msgi focused unless another input/textarea/draw mode is active ──
 el('msgi').addEventListener('blur', () => {
   setTimeout(() => {
+    // skip if draw toolbar is open (draw mode on)
+    if (!el('draw-ftb')?.classList.contains('hidden')) return;
     const focused = document.activeElement;
     const tag = focused?.tagName;
-    if (tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT' && !focused?.isContentEditable) {
-      el('msgi')?.focus();
-    }
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || focused?.isContentEditable) return;
+    el('msgi')?.focus();
   }, 0);
 });
 

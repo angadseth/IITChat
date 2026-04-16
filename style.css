@@ -609,6 +609,47 @@ body {
 }
 .snd:hover { transform: scale(1.08); }
 
+/* ── MIC BUTTON ── */
+.mic-btn { background: var(--accent) !important; }
+.mic-btn.vn-recording {
+  background: #ff4f6b !important;
+  animation: vnPulse 0.8s ease-in-out infinite;
+}
+@keyframes vnPulse {
+  0%,100% { box-shadow: 0 0 0 0 rgba(255,79,107,0.5); }
+  50%      { box-shadow: 0 0 0 10px rgba(255,79,107,0); }
+}
+.vn-timer {
+  font-size: 12px; font-weight: 600; color: #ff4f6b;
+  min-width: 34px; text-align: center;
+  align-self: center;
+}
+
+/* ── VOICE NOTE BUBBLE ── */
+.vn-wrap {
+  display: flex; align-items: center; gap: 8px;
+  min-width: 180px; max-width: 240px;
+}
+.vn-play {
+  width: 36px; height: 36px; border-radius: 50%; border: none;
+  background: var(--accent); color: #fff; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; font-size: 13px; transition: var(--tr);
+}
+.vn-play:hover { transform: scale(1.1); }
+.vn-bar {
+  flex: 1; height: 4px; background: rgba(255,255,255,0.15);
+  border-radius: 2px; overflow: hidden;
+}
+.vn-prog {
+  height: 100%; width: 0%; background: var(--accent);
+  border-radius: 2px; transition: width 0.1s linear;
+}
+.vn-dur {
+  font-size: 11px; color: var(--text2); min-width: 28px;
+  text-align: right; flex-shrink: 0;
+}
+
 /* ── EMOJI PICKER ── */
 .epnl {
   position: absolute; bottom: calc(100% + 10px); left: 0;

@@ -362,9 +362,16 @@
               <textarea id="msgi" rows="1" placeholder="Type a message..."
                 onkeydown="onKey(event)" oninput="aRsz(this)"></textarea>
             </div>
-            <button class="snd" onclick="sendMsg()">
+            <button class="snd" id="snd-btn" onclick="sendMsg()" style="display:none">
               <i class="fa fa-paper-plane"></i>
             </button>
+            <button class="snd mic-btn" id="mic-btn"
+              onmousedown="vnStart()" onmouseup="vnStop()"
+              ontouchstart="vnStart()" ontouchend="vnStop()"
+              oncontextmenu="return false" title="Hold to record">
+              <i class="fa fa-microphone"></i>
+            </button>
+            <span class="vn-timer hidden" id="vn-timer">0:00</span>
             <!-- Attach Menu -->
             <div class="amnl hidden" id="amnl">
               <div class="amo" onclick="pickFile('media')"><i class="fa fa-image" style="color:#6c63ff"></i> Photo</div>

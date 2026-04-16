@@ -19,6 +19,9 @@ import {
   getDatabase,
   ref, set, get, push, onValue, onChildAdded, update, remove, onDisconnect, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import {
+  getStorage, ref as sRef, uploadBytes, getDownloadURL
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
 
 // ══════════════════════════════════════════════════════
 // 🔥 BHAI YAHAN APNA FIREBASE CONFIG PASTE KAR
@@ -35,9 +38,10 @@ const FC = {
 };
 // ══════════════════════════════════════════════════════
 
-const fbApp = initializeApp(FC);
-const auth  = getAuth(fbApp);
-const db    = getDatabase(fbApp);
+const fbApp   = initializeApp(FC);
+const auth    = getAuth(fbApp);
+const db      = getDatabase(fbApp);
+const storage = getStorage(fbApp);
 
 // ══════════════════════════════════════════════════════
 // 📸 IMGBB API KEY — imgbb.com pe free account banao
@@ -532,6 +536,19 @@ function mkBody(msg, isMe, isNew) {
   if (msg.type === 'video') {
     return `<video class="mvid" controls preload="metadata"><source src="${msg.url}"></video>`;
   }
+  if (msg.type === 'audio') {
+    const dur = msg.duration ? `<span class="vn-dur" id="vndur-${msg.id}">0:00</span>` : '';
+    return `<div class="vn-wrap">
+      <button class="vn-play" onclick="vnPlay('${msg.id}','${msg.url}')">
+        <i class="fa fa-play" id="vnicon-${msg.id}"></i>
+      </button>
+      <div class="vn-bar">
+        <div class="vn-prog" id="vnprog-${msg.id}"></div>
+      </div>
+      ${dur}
+      <audio id="vnaudio-${msg.id}" src="${msg.url}" preload="none"></audio>
+    </div>`;
+  }
   if (msg.type === 'document') {
     const name = escHtml(msg.name || 'Document');
     const size = fmtSize(msg.size);
@@ -702,6 +719,127 @@ window.sendMsg = async () => {
 
 window.onKey  = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMsg(); } };
 window.aRsz   = el => { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 85) + 'px'; };
+
+// ═══════════════════════════════════════
+//  VOICE NOTE
+// ═══════════════════════════════════════
+let vnRecorder = null, vnChunks = [], vnStream = null, vnTimer = null, vnSec = 0;
+
+function vnUpdateBtn() {
+  const hasText = el('msgi').value.trim().length > 0;
+  const sndBtn  = el('snd-btn');
+  const micBtn  = el('mic-btn');
+  if (!sndBtn || !micBtn) return;
+  sndBtn.style.display = hasText ? 'flex' : 'none';
+  micBtn.style.display = hasText ? 'none' : 'flex';
+}
+
+window.vnStart = async () => {
+  if (!CCI) { toast('Open a chat first'); return; }
+  try {
+    vnStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch {
+    toast('❌ Mic permission denied'); return;
+  }
+  vnChunks = []; vnSec = 0;
+  vnRecorder = new MediaRecorder(vnStream);
+  vnRecorder.ondataavailable = e => vnChunks.push(e.data);
+  vnRecorder.onstop = vnSend;
+  vnRecorder.start();
+
+  el('mic-btn').classList.add('vn-recording');
+  el('vn-timer').textContent = '0:00';
+  el('vn-timer').classList.remove('hidden');
+  vnTimer = setInterval(() => {
+    vnSec++;
+    const m = Math.floor(vnSec / 60), s = vnSec % 60;
+    el('vn-timer').textContent = `${m}:${String(s).padStart(2,'0')}`;
+  }, 1000);
+};
+
+window.vnStop = () => {
+  if (!vnRecorder || vnRecorder.state === 'inactive') return;
+  vnRecorder.stop();
+  vnStream?.getTracks().forEach(t => t.stop());
+  clearInterval(vnTimer);
+  el('mic-btn').classList.remove('vn-recording');
+  el('vn-timer').classList.add('hidden');
+};
+
+window.vnCancel = () => {
+  if (vnRecorder && vnRecorder.state !== 'inactive') {
+    vnRecorder.ondataavailable = null;
+    vnRecorder.onstop = null;
+    vnRecorder.stop();
+  }
+  vnStream?.getTracks().forEach(t => t.stop());
+  clearInterval(vnTimer);
+  el('mic-btn').classList.remove('vn-recording');
+  el('vn-timer').classList.add('hidden');
+  vnChunks = [];
+};
+
+async function vnSend() {
+  if (!vnChunks.length) return;
+  const blob = new Blob(vnChunks, { type: 'audio/webm' });
+  vnChunks = [];
+  if (blob.size < 1000) return; // too short
+  toast('⏳ Sending voice note…');
+  try {
+    const path = `voices/${CCI}/${Date.now()}_${CU.uid}.webm`;
+    const snap  = await uploadBytes(sRef(storage, path), blob);
+    const url   = await getDownloadURL(snap.ref);
+    await sendData({ type: 'audio', url, duration: vnSec });
+  } catch (err) {
+    console.error(err);
+    toast('❌ Upload failed');
+  }
+}
+
+// audio player
+window.vnPlay = (mid, url) => {
+  const audio   = el(`vnaudio-${mid}`);
+  const icon    = el(`vnicon-${mid}`);
+  const prog    = el(`vnprog-${mid}`);
+  const durEl   = el(`vndur-${mid}`);
+  if (!audio) return;
+
+  // pause all other voice notes
+  document.querySelectorAll('.vn-wrap audio').forEach(a => {
+    if (a !== audio && !a.paused) {
+      a.pause();
+      const oid = a.id.replace('vnaudio-','');
+      const oi  = el(`vnicon-${oid}`);
+      if (oi) { oi.className = 'fa fa-play'; }
+    }
+  });
+
+  if (audio.paused) {
+    audio.play();
+    icon.className = 'fa fa-pause';
+    audio.ontimeupdate = () => {
+      const pct = audio.duration ? (audio.currentTime / audio.duration) * 100 : 0;
+      if (prog) prog.style.width = pct + '%';
+      if (durEl) {
+        const left = Math.max(0, Math.ceil(audio.duration - audio.currentTime));
+        const m = Math.floor(left / 60), s = left % 60;
+        durEl.textContent = `${m}:${String(s).padStart(2,'0')}`;
+      }
+    };
+    audio.onended = () => {
+      icon.className = 'fa fa-play';
+      if (prog) prog.style.width = '0%';
+      if (durEl) {
+        const total = Math.ceil(audio.duration || 0);
+        const m = Math.floor(total / 60), s = total % 60;
+        durEl.textContent = `${m}:${String(s).padStart(2,'0')}`;
+      }
+    };
+  } else {
+    audio.pause();
+    icon.className = 'fa fa-play';
+  }
+};
 
 // ═══════════════════════════════════════
 //  EMOJI PICKER
@@ -1203,6 +1341,7 @@ function setupNotifForContact(uid, uName, uAvatar) {
     const body = msg.type === 'text'  ? msg.text.substring(0, 80)
                : msg.type === 'image' ? '📷 Photo'
                : msg.type === 'video' ? '🎥 Video'
+               : msg.type === 'audio' ? '🎤 Voice note'
                : '📎 File';
 
     const n = new Notification(`${uAvatar} ${uName}`, {
@@ -1778,7 +1917,7 @@ el('fi-media').addEventListener('change', e => handleFilePick(e, 'media'));
 el('fi-vo').addEventListener('change',    e => handleFilePick(e, 'viewonce'));
 
 // ── typing listener ──
-el('msgi').addEventListener('input', onTyping);
+el('msgi').addEventListener('input', () => { onTyping(); vnUpdateBtn(); });
 
 // ── Always keep msgi focused unless another input/textarea/draw mode is active ──
 el('msgi').addEventListener('blur', () => {

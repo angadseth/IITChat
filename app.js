@@ -777,7 +777,10 @@ window.vnStart = async () => {
 
 window.vnStopSend = () => {
   if (!vnRecorder || vnRecorder.state === 'inactive') return;
-  vnRecorder.onstop = vnDoSend;
+  // save before stop() clears them
+  const mimeType = vnRecorder.mimeType || 'audio/webm';
+  const duration = vnSec;
+  vnRecorder.onstop = () => vnDoSend(mimeType, duration);
   vnRecorder.stop();
   vnStream?.getTracks().forEach(t => t.stop());
   clearInterval(vnTimer);
@@ -796,11 +799,9 @@ window.vnCancel = () => {
   vnChunks = [];
 };
 
-async function vnDoSend() {
-  if (!vnChunks.length) return;
-  const mimeType = vnRecorder?.mimeType || 'audio/webm';
+async function vnDoSend(mimeType, duration) {
+  if (!vnChunks.length) { toast('No audio recorded'); return; }
   const blob = new Blob(vnChunks, { type: mimeType });
-  const duration = vnSec;
   vnChunks = [];
   if (blob.size < 500) { toast('Too short!'); return; }
   toast('⏳ Sending voice note…');
@@ -810,9 +811,10 @@ async function vnDoSend() {
     const snap = await uploadBytes(sRef(storage, path), blob, { contentType: mimeType });
     const url  = await getDownloadURL(snap.ref);
     await sendData({ type: 'audio', url, duration });
+    toast('✅ Voice note sent!');
   } catch (err) {
-    console.error(err);
-    toast('❌ Upload failed');
+    console.error('Voice upload error:', err);
+    toast('❌ Upload failed: ' + (err.code || err.message));
   }
 }
 

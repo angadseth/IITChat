@@ -13,10 +13,10 @@
   --text: #e8e8f0;
   --text2: #9090b0;
   --text3: #5a5a7a;
-  --bubble-me:   rgba(108, 99, 255, 0.18);
-  --bubble-them: rgba(52, 211, 120, 0.10);
-  --bubble-me-border:   rgba(108, 99, 255, 0.28);
-  --bubble-them-border: rgba(52, 211, 120, 0.18);
+  --bubble-me:   rgba(108, 99, 255, 0.30);
+  --bubble-them: rgba(52, 211, 120, 0.18);
+  --bubble-me-border:   rgba(108, 99, 255, 0.45);
+  --bubble-them-border: rgba(52, 211, 120, 0.30);
   --shadow: 0 8px 32px rgba(0,0,0,0.4);
   --online: #43e97b;
   --offline: #5a5a7a;
@@ -32,10 +32,10 @@
   --text: #1a1a2e;
   --text2: #5a5a80;
   --text3: #9090b0;
-  --bubble-me:   rgba(108, 99, 255, 0.13);
-  --bubble-them: rgba(52, 211, 120, 0.10);
-  --bubble-me-border:   rgba(108, 99, 255, 0.22);
-  --bubble-them-border: rgba(52, 211, 120, 0.22);
+  --bubble-me:   rgba(108, 99, 255, 0.22);
+  --bubble-them: rgba(52, 211, 120, 0.16);
+  --bubble-me-border:   rgba(108, 99, 255, 0.38);
+  --bubble-them-border: rgba(52, 211, 120, 0.30);
   --shadow: 0 8px 32px rgba(108,99,255,0.12);
 }
 

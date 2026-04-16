@@ -778,14 +778,16 @@ window.vnStart = async () => {
 
 window.vnStopSend = () => {
   if (!vnRecorder || vnRecorder.state === 'inactive') return;
-  // save before stop() clears them
   const mimeType = vnRecorder.mimeType || 'audio/webm';
   const duration = vnSec;
-  vnRecorder.onstop = () => vnDoSend(mimeType, duration);
-  vnRecorder.stop();
-  vnStream?.getTracks().forEach(t => t.stop());
   clearInterval(vnTimer);
   vnShowRecBar(false);
+  // stop tracks INSIDE onstop so final ondataavailable fires first
+  vnRecorder.onstop = () => {
+    vnStream?.getTracks().forEach(t => t.stop());
+    vnDoSend(mimeType, duration);
+  };
+  vnRecorder.stop();
 };
 
 window.vnCancel = () => {
@@ -801,13 +803,15 @@ window.vnCancel = () => {
 };
 
 async function vnDoSend(mimeType, duration) {
-  if (!vnChunks.length) { toast('No audio recorded'); return; }
-  const blob = new Blob(vnChunks, { type: mimeType });
+  const chunks = [...vnChunks];
   vnChunks = [];
-  if (blob.size < 500) { toast('Too short!'); return; }
-  toast('⏳ Sending voice note…');
+  if (!chunks.length) { toast('❌ No audio captured'); return; }
+  const blob = new Blob(chunks, { type: mimeType });
+  console.log('Voice blob:', blob.size, 'bytes, type:', mimeType, 'duration:', duration);
+  if (blob.size < 500) { toast('Too short — try recording longer'); return; }
+  if (blob.size > 900_000) { toast('❌ Too long (max ~30s)'); return; }
+  toast('⏳ Sending…');
   try {
-    // convert to base64 data URL — no Storage setup needed
     const url = await new Promise((res, rej) => {
       const reader = new FileReader();
       reader.onload  = () => res(reader.result);
@@ -818,7 +822,7 @@ async function vnDoSend(mimeType, duration) {
     toast('✅ Voice note sent!');
   } catch (err) {
     console.error('Voice send error:', err);
-    toast('❌ Failed to send voice note');
+    toast('❌ ' + (err.message || 'Send failed'));
   }
 }
 

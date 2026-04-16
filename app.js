@@ -537,9 +537,11 @@ function mkBody(msg, isMe, isNew) {
     return `<video class="mvid" controls preload="metadata"><source src="${msg.url}"></video>`;
   }
   if (msg.type === 'audio') {
-    const dur = msg.duration ? `<span class="vn-dur" id="vndur-${msg.id}">0:00</span>` : '';
+    const d = msg.duration || 0;
+    const durTxt = `${Math.floor(d/60)}:${String(d%60).padStart(2,'0')}`;
+    const dur = `<span class="vn-dur" id="vndur-${msg.id}">${durTxt}</span>`;
     return `<div class="vn-wrap">
-      <button class="vn-play" onclick="vnPlay('${msg.id}','${msg.url}')">
+      <button class="vn-play" onclick="vnPlay('${msg.id}')">
         <i class="fa fa-play" id="vnicon-${msg.id}"></i>
       </button>
       <div class="vn-bar">
@@ -734,6 +736,21 @@ function vnUpdateBtn() {
   micBtn.style.display = hasText ? 'none' : 'flex';
 }
 
+function vnShowRecBar(show) {
+  const recBar   = el('vn-rec-bar');
+  const iwNormal = el('iw-normal');
+  const micBtn   = el('mic-btn');
+  if (show) {
+    iwNormal.style.display = 'none';
+    micBtn.style.display   = 'none';
+    recBar.classList.remove('hidden');
+  } else {
+    recBar.classList.add('hidden');
+    iwNormal.style.display = '';
+    vnUpdateBtn();
+  }
+}
+
 window.vnStart = async () => {
   if (!CCI) { toast('Open a chat first'); return; }
   try {
@@ -742,14 +759,15 @@ window.vnStart = async () => {
     toast('❌ Mic permission denied'); return;
   }
   vnChunks = []; vnSec = 0;
-  vnRecorder = new MediaRecorder(vnStream);
-  vnRecorder.ondataavailable = e => vnChunks.push(e.data);
-  vnRecorder.onstop = vnSend;
-  vnRecorder.start();
+  const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+    ? 'audio/webm;codecs=opus'
+    : MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '';
+  vnRecorder = mimeType ? new MediaRecorder(vnStream, { mimeType }) : new MediaRecorder(vnStream);
+  vnRecorder.ondataavailable = e => { if (e.data.size > 0) vnChunks.push(e.data); };
+  vnRecorder.start(100); // collect chunks every 100ms
 
-  el('mic-btn').classList.add('vn-recording');
+  vnShowRecBar(true);
   el('vn-timer').textContent = '0:00';
-  el('vn-timer').classList.remove('hidden');
   vnTimer = setInterval(() => {
     vnSec++;
     const m = Math.floor(vnSec / 60), s = vnSec % 60;
@@ -757,13 +775,13 @@ window.vnStart = async () => {
   }, 1000);
 };
 
-window.vnStop = () => {
+window.vnStopSend = () => {
   if (!vnRecorder || vnRecorder.state === 'inactive') return;
+  vnRecorder.onstop = vnDoSend;
   vnRecorder.stop();
   vnStream?.getTracks().forEach(t => t.stop());
   clearInterval(vnTimer);
-  el('mic-btn').classList.remove('vn-recording');
-  el('vn-timer').classList.add('hidden');
+  vnShowRecBar(false);
 };
 
 window.vnCancel = () => {
@@ -774,22 +792,24 @@ window.vnCancel = () => {
   }
   vnStream?.getTracks().forEach(t => t.stop());
   clearInterval(vnTimer);
-  el('mic-btn').classList.remove('vn-recording');
-  el('vn-timer').classList.add('hidden');
+  vnShowRecBar(false);
   vnChunks = [];
 };
 
-async function vnSend() {
+async function vnDoSend() {
   if (!vnChunks.length) return;
-  const blob = new Blob(vnChunks, { type: 'audio/webm' });
+  const mimeType = vnRecorder?.mimeType || 'audio/webm';
+  const blob = new Blob(vnChunks, { type: mimeType });
+  const duration = vnSec;
   vnChunks = [];
-  if (blob.size < 1000) return; // too short
+  if (blob.size < 500) { toast('Too short!'); return; }
   toast('⏳ Sending voice note…');
   try {
-    const path = `voices/${CCI}/${Date.now()}_${CU.uid}.webm`;
-    const snap  = await uploadBytes(sRef(storage, path), blob);
-    const url   = await getDownloadURL(snap.ref);
-    await sendData({ type: 'audio', url, duration: vnSec });
+    const ext  = mimeType.includes('ogg') ? 'ogg' : 'webm';
+    const path = `voices/${CCI}/${Date.now()}_${CU.uid}.${ext}`;
+    const snap = await uploadBytes(sRef(storage, path), blob, { contentType: mimeType });
+    const url  = await getDownloadURL(snap.ref);
+    await sendData({ type: 'audio', url, duration });
   } catch (err) {
     console.error(err);
     toast('❌ Upload failed');
@@ -797,20 +817,20 @@ async function vnSend() {
 }
 
 // audio player
-window.vnPlay = (mid, url) => {
-  const audio   = el(`vnaudio-${mid}`);
-  const icon    = el(`vnicon-${mid}`);
-  const prog    = el(`vnprog-${mid}`);
-  const durEl   = el(`vndur-${mid}`);
+window.vnPlay = (mid) => {
+  const audio  = el(`vnaudio-${mid}`);
+  const icon   = el(`vnicon-${mid}`);
+  const prog   = el(`vnprog-${mid}`);
+  const durEl  = el(`vndur-${mid}`);
   if (!audio) return;
 
   // pause all other voice notes
   document.querySelectorAll('.vn-wrap audio').forEach(a => {
     if (a !== audio && !a.paused) {
       a.pause();
-      const oid = a.id.replace('vnaudio-','');
+      const oid = a.id.replace('vnaudio-', '');
       const oi  = el(`vnicon-${oid}`);
-      if (oi) { oi.className = 'fa fa-play'; }
+      if (oi) oi.className = 'fa fa-play';
     }
   });
 
@@ -822,8 +842,7 @@ window.vnPlay = (mid, url) => {
       if (prog) prog.style.width = pct + '%';
       if (durEl) {
         const left = Math.max(0, Math.ceil(audio.duration - audio.currentTime));
-        const m = Math.floor(left / 60), s = left % 60;
-        durEl.textContent = `${m}:${String(s).padStart(2,'0')}`;
+        durEl.textContent = `${Math.floor(left/60)}:${String(left%60).padStart(2,'0')}`;
       }
     };
     audio.onended = () => {
@@ -831,8 +850,7 @@ window.vnPlay = (mid, url) => {
       if (prog) prog.style.width = '0%';
       if (durEl) {
         const total = Math.ceil(audio.duration || 0);
-        const m = Math.floor(total / 60), s = total % 60;
-        durEl.textContent = `${m}:${String(s).padStart(2,'0')}`;
+        durEl.textContent = `${Math.floor(total/60)}:${String(total%60).padStart(2,'0')}`;
       }
     };
   } else {
@@ -1939,3 +1957,4 @@ document.addEventListener('keydown', e => {
 // ── init ──
 applyTheme(localStorage.getItem('iitchat-theme') || 'dark');
 showCat('smileys', null);
+vnUpdateBtn();

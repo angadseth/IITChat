@@ -356,7 +356,8 @@
         <!-- Input -->
         <div class="ia">
           <div class="ir">
-            <div class="iw">
+            <!-- Normal input row -->
+            <div class="iw" id="iw-normal">
               <button class="eb" onclick="toggleEP()">😊</button>
               <button class="eb" id="amb" onclick="toggleAM()" title="Attach file"><i class="fa fa-paperclip"></i></button>
               <textarea id="msgi" rows="1" placeholder="Type a message..."
@@ -365,13 +366,24 @@
             <button class="snd" id="snd-btn" onclick="sendMsg()" style="display:none">
               <i class="fa fa-paper-plane"></i>
             </button>
-            <button class="snd mic-btn" id="mic-btn"
-              onmousedown="vnStart()" onmouseup="vnStop()"
-              ontouchstart="vnStart()" ontouchend="vnStop()"
-              oncontextmenu="return false" title="Hold to record">
+            <button class="snd mic-btn" id="mic-btn" onclick="vnStart()" title="Voice note">
               <i class="fa fa-microphone"></i>
             </button>
-            <span class="vn-timer hidden" id="vn-timer">0:00</span>
+
+            <!-- Recording bar (replaces input while recording) -->
+            <div class="vn-rec-bar hidden" id="vn-rec-bar">
+              <button class="vn-cancel-btn" onclick="vnCancel()" title="Cancel">
+                <i class="fa fa-times"></i>
+              </button>
+              <div class="vn-rec-info">
+                <span class="vn-rec-dot"></span>
+                <span class="vn-rec-label">Recording</span>
+                <span id="vn-timer">0:00</span>
+              </div>
+              <button class="vn-send-btn" onclick="vnStopSend()" title="Send">
+                <i class="fa fa-check"></i>
+              </button>
+            </div>
             <!-- Attach Menu -->
             <div class="amnl hidden" id="amnl">
               <div class="amo" onclick="pickFile('media')"><i class="fa fa-image" style="color:#6c63ff"></i> Photo</div>

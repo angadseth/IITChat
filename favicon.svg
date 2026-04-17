@@ -1,28 +1,54 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
   <defs>
-    <linearGradient id="g1" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%"   stop-color="#6c63ff"/>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#0f0f1a"/>
+      <stop offset="100%" stop-color="#1a1030"/>
+    </linearGradient>
+    <linearGradient id="star" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#a78bfa"/>
+      <stop offset="40%"  stop-color="#6c63ff"/>
       <stop offset="100%" stop-color="#43e97b"/>
     </linearGradient>
-    <linearGradient id="g2" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%"   stop-color="#ffffff" stop-opacity="0.95"/>
-      <stop offset="100%" stop-color="#e8e4ff" stop-opacity="0.85"/>
+    <linearGradient id="star2" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%"   stop-color="#43e97b" stop-opacity="0.7"/>
+      <stop offset="100%" stop-color="#6c63ff" stop-opacity="0.4"/>
     </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="1.5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
   </defs>
 
-  <!-- outer rounded square -->
-  <rect width="64" height="64" rx="16" fill="url(#g1)"/>
+  <!-- dark rounded bg -->
+  <rect width="64" height="64" rx="15" fill="url(#bg)"/>
 
-  <!-- subtle inner glow ring -->
-  <rect x="2" y="2" width="60" height="60" rx="14" fill="none"
-        stroke="rgba(255,255,255,0.18)" stroke-width="1.5"/>
+  <!-- subtle border -->
+  <rect x="1" y="1" width="62" height="62" rx="14" fill="none"
+        stroke="rgba(108,99,255,0.3)" stroke-width="1"/>
 
-  <!-- chat bubble body -->
-  <path d="M12 16 Q12 10 18 10 H46 Q52 10 52 16 V36 Q52 42 46 42 H30 L20 54 V42 H18 Q12 42 12 36 Z"
-        fill="url(#g2)"/>
+  <!-- Gemini-style 4-pointed star — main -->
+  <path filter="url(#glow)"
+    d="M32 6
+       C32 6 33.8 20 38 26
+       C42.5 32 58 32 58 32
+       C58 32 42.5 32 38 38
+       C33.8 44 32 58 32 58
+       C32 58 30.2 44 26 38
+       C21.5 32 6 32 6 32
+       C6 32 21.5 32 26 26
+       C30.2 20 32 6 32 6 Z"
+    fill="url(#star)"/>
 
-  <!-- three dots inside bubble -->
-  <circle cx="24" cy="26" r="3.2" fill="url(#g1)"/>
-  <circle cx="32" cy="26" r="3.2" fill="url(#g1)"/>
-  <circle cx="40" cy="26" r="3.2" fill="url(#g1)"/>
+  <!-- subtle second layer for depth -->
+  <path opacity="0.35"
+    d="M32 14
+       C32 14 33.2 23 36 27.5
+       C39 32 48 32 48 32
+       C48 32 39 32 36 36.5
+       C33.2 41 32 50 32 50
+       C32 50 30.8 41 28 36.5
+       C25 32 16 32 16 32
+       C16 32 25 32 28 27.5
+       C30.8 23 32 14 32 14 Z"
+    fill="url(#star2)"/>
 </svg>

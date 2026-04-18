@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IIT Chat — Screen Share</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0d0d1f; color: #fff;
+    font-family: 'Sora', system-ui, sans-serif;
+    height: 100vh; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; overflow: hidden;
+  }
+
+  /* ── top bar ── */
+  #top-bar {
+    position: fixed; top: 0; left: 0; right: 0; height: 48px;
+    background: rgba(13,13,31,0.85); backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(108,99,255,0.2);
+    display: flex; align-items: center; padding: 0 16px; gap: 12px;
+    z-index: 10;
+  }
+  .tb-dot { width: 9px; height: 9px; border-radius: 50%; background: #ff4f6b; animation: blink 1s ease infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  .tb-label { font-size: 13px; font-weight: 600; flex: 1; }
+  .tb-label span { color: #a78bfa; }
+  #fs-btn {
+    background: rgba(108,99,255,0.2); border: 1px solid rgba(108,99,255,0.3);
+    color: #fff; padding: 6px 14px; border-radius: 8px; cursor: pointer;
+    font-size: 12px; font-weight: 600; transition: .2s;
+  }
+  #fs-btn:hover { background: rgba(108,99,255,0.4); }
+
+  /* ── video ── */
+  #screen-video {
+    width: 100vw; height: 100vh; object-fit: contain;
+    background: #000; display: block;
+  }
+
+  /* ── waiting state ── */
+  #waiting {
+    display: flex; flex-direction: column; align-items: center; gap: 20px;
+    text-align: center;
+  }
+  .wait-icon { font-size: 56px; animation: pulse 2s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{transform:scale(1);opacity:1} 50%{transform:scale(1.08);opacity:0.7} }
+  .wait-title { font-size: 22px; font-weight: 700; }
+  .wait-sub   { font-size: 14px; color: #9090b0; }
+  .wait-spinner {
+    width: 40px; height: 40px; border-radius: 50%;
+    border: 3px solid rgba(108,99,255,0.2);
+    border-top-color: #6c63ff;
+    animation: spin 0.9s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── error state ── */
+  #error-msg {
+    display: none; flex-direction: column; align-items: center; gap: 14px; text-align: center;
+  }
+  .err-icon  { font-size: 48px; }
+  .err-title { font-size: 20px; font-weight: 700; color: #ff4f6b; }
+  .err-sub   { font-size: 13px; color: #9090b0; }
+</style>
+</head>
+<body>
+
+<div id="top-bar" style="display:none">
+  <div class="tb-dot"></div>
+  <div class="tb-label">Live Screen Share — <span id="sharer-name">Partner</span></div>
+  <button id="fs-btn" onclick="toggleFS()">⛶ Fullscreen</button>
+</div>
+
+<video id="screen-video" autoplay playsinline style="display:none; padding-top:48px"></video>
+
+<div id="waiting">
+  <div class="wait-icon">🖥️</div>
+  <div class="wait-title">Connecting…</div>
+  <div class="wait-sub">Waiting for screen share stream</div>
+  <div class="wait-spinner"></div>
+</div>
+
+<div id="error-msg">
+  <div class="err-icon">😕</div>
+  <div class="err-title">Share Ended</div>
+  <div class="err-sub" id="err-sub-text">The screen share has stopped.</div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import {
+  getDatabase, ref, onValue, set, push, remove, get
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+const FC = {
+  apiKey:            "AIzaSyBUkQ3ykM5ErEKeLSfClIuaU7Qtokwg0Ek",
+  authDomain:        "iitchat-ef6a0.firebaseapp.com",
+  databaseURL:       "https://iitchat-ef6a0-default-rtdb.firebaseio.com",
+  projectId:         "iitchat-ef6a0",
+  storageBucket:     "iitchat-ef6a0.firebasestorage.app",
+  messagingSenderId: "701410820532",
+  appId:             "1:701410820532:web:1c975bcfd5812c10f132e1"
+};
+
+const ICE_CFG = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+  ]
+};
+
+const app  = initializeApp(FC);
+const db   = getDatabase(app);
+const auth = getAuth(app);
+
+const params = new URLSearchParams(location.search);
+const CCI    = params.get('cci');
+
+function showError(msg) {
+  document.getElementById('waiting').style.display    = 'none';
+  document.getElementById('screen-video').style.display = 'none';
+  document.getElementById('top-bar').style.display    = 'none';
+  const errDiv = document.getElementById('error-msg');
+  errDiv.style.display = 'flex';
+  document.getElementById('err-sub-text').textContent = msg || 'The screen share has stopped.';
+}
+
+if (!CCI) { showError('Invalid session link.'); }
+else {
+  onAuthStateChanged(auth, async user => {
+    if (!user) { showError('Please sign in to IIT Chat first.'); return; }
+    startViewer(user);
+  });
+}
+
+async function startViewer(CU) {
+  const ssRef  = ref(db, `screenShare/${CCI}`);
+  const snap   = await get(ssRef);
+  const data   = snap.val();
+
+  if (!data || !data.active || !data.offer) {
+    showError('No active screen share found.'); return;
+  }
+
+  document.getElementById('sharer-name').textContent = data.sharerName || 'Partner';
+
+  const pc = new RTCPeerConnection(ICE_CFG);
+
+  // ── show stream when tracks arrive ──
+  pc.ontrack = e => {
+    const video = document.getElementById('screen-video');
+    video.srcObject = e.streams[0];
+    video.style.display  = 'block';
+    document.getElementById('waiting').style.display  = 'none';
+    document.getElementById('top-bar').style.display  = 'flex';
+  };
+
+  // ── viewer ICE → Firebase ──
+  pc.onicecandidate = e => {
+    if (e.candidate) push(ref(db, `screenShare/${CCI}/ice_viewer`), e.candidate.toJSON());
+  };
+
+  // ── set remote offer ──
+  await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+  const answer = await pc.createAnswer();
+  await pc.setLocalDescription(answer);
+  await set(ref(db, `screenShare/${CCI}/answer`), { sdp: answer.sdp, type: answer.type });
+
+  // ── sharer ICE candidates ──
+  onValue(ref(db, `screenShare/${CCI}/ice_sharer`), snap => {
+    snap.forEach(c => pc.addIceCandidate(new RTCIceCandidate(c.val())).catch(() => {}));
+  });
+
+  // ── detect when share ends ──
+  onValue(ssRef, snap => {
+    if (!snap.val() || !snap.val().active) showError('Screen share has ended.');
+  });
+}
+
+window.toggleFS = () => {
+  const video = document.getElementById('screen-video');
+  if (!document.fullscreenElement) video.requestFullscreen();
+  else document.exitFullscreen();
+};
+</script>
+</body>
+</html>

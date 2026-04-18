@@ -682,6 +682,30 @@ body {
   text-align: right; flex-shrink: 0;
 }
 
+/* ── SCREEN SHARE ── */
+.ss-active { color: #ff4f6b !important; }
+.ss-watch-bar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 16px; background: rgba(108,99,255,0.12);
+  border-bottom: 1px solid rgba(108,99,255,0.25);
+  font-size: 13px; flex-shrink: 0;
+}
+.ss-watch-dot {
+  width: 8px; height: 8px; border-radius: 50%; background: #ff4f6b; flex-shrink: 0;
+  animation: vnBlink 1s ease-in-out infinite;
+}
+.ss-watch-bar span { flex: 1; color: var(--text2); }
+.ss-watch-btn {
+  background: var(--accent); color: #fff; border: none;
+  padding: 5px 14px; border-radius: 8px; font-size: 12px;
+  font-weight: 600; cursor: pointer; transition: var(--tr);
+}
+.ss-watch-btn:hover { opacity: 0.85; }
+.ss-watch-close {
+  background: none; border: none; color: var(--text3);
+  cursor: pointer; font-size: 14px; padding: 2px 6px;
+}
+
 /* ── EMOJI PICKER ── */
 .epnl {
   position: absolute; bottom: calc(100% + 10px); left: 0;

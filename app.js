@@ -7,6 +7,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { initDrawFeature, onChatOpen as drawChatOpen } from './features/draw.js';
 import { initMsgMenu } from './features/msgMenu.js';
+import { initScreenShare } from './features/screenShare.js';
 import {
   getAuth,
   createUserWithEmailAndPassword,
@@ -56,6 +57,8 @@ const THREE_DAYS = 3 * 24 * 60 * 60 * 1000;   // ms
 initDrawFeature(db, ref, set, push, onValue, onChildAdded, () => ({ CU, CCI, isGroup }));
 // ── feature: message menu ──
 initMsgMenu(() => ({ CU, CCT }), () => el('msgi')?.focus());
+// ── feature: screen share ──
+initScreenShare(db, ref, set, get, onValue, remove, push, update, () => ({ CU, CCI, CCT }), toast);
 
 // ── state ──
 let CU       = null;   // current user
@@ -457,6 +460,7 @@ async function openChat(uid, u) {
 
   startMusicSync(CCI);
   drawChatOpen();
+  window.ssInit?.(CCI);
   loadMsgs();
 }
 

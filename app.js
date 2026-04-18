@@ -8,6 +8,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 import { initDrawFeature, onChatOpen as drawChatOpen } from './features/draw.js';
 import { initMsgMenu } from './features/msgMenu.js';
 import { initScreenShare } from './features/screenShare.js';
+import { initSnakeGame }  from './features/snakeGame.js';
 import {
   getAuth,
   createUserWithEmailAndPassword,
@@ -59,6 +60,8 @@ initDrawFeature(db, ref, set, push, onValue, onChildAdded, () => ({ CU, CCI, isG
 initMsgMenu(() => ({ CU, CCT }), () => el('msgi')?.focus());
 // ── feature: screen share ──
 initScreenShare(db, ref, set, get, onValue, remove, push, update, () => ({ CU, CCI, CCT }), toast);
+// ── feature: snake & ladders game ──
+initSnakeGame(() => ({ CU, CCI }), toast);
 
 // ── state ──
 let CU       = null;   // current user

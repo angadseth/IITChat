@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html lang="en" class="classic">
+<head>
+<meta charset="UTF-8">
+<title>IIT Chat — Snake &amp; Ladders</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<style>
+/* ── Reset ── */
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+html, body { height:100%; font-family:'Sora',system-ui,sans-serif; overflow:hidden; user-select:none; }
+
+/* ══════════════════════════════════════
+   THEMES
+══════════════════════════════════════ */
+html.classic {
+  --bg:           #f5ead0;
+  --bg2:          #ede0c0;
+  --sq-a:         #9dcc96;
+  --sq-b:         #f9f3e2;
+  --board-border: #8b6914;
+  --sq-num:       rgba(0,0,0,0.3);
+  --panel-bg:     rgba(255,248,230,0.96);
+  --card-border:  rgba(139,105,20,0.25);
+  --text:         #3d2b1f;
+  --text2:        #8a6840;
+  --accent:       #c8a040;
+  --dice-bg:      #fffbf0;
+  --dice-dot:     #3d2b1f;
+  --dice-border:  #c8a040;
+  --snake:        #d63031;
+  --ladder:       #8b6914;
+  --title:        linear-gradient(135deg,#8b6914 0%,#e8c060 100%);
+  --win-bg:       rgba(139,105,20,0.96);
+  --roll-btn:     #c8a040;
+  --badge-bg:     rgba(200,160,64,0.15);
+  --badge-color:  #8b6914;
+}
+html.heaven {
+  --bg:           #e8f5ff;
+  --bg2:          #d4edff;
+  --sq-a:         #fff9c4;
+  --sq-b:         #e3f4ff;
+  --board-border: #ffd700;
+  --sq-num:       rgba(28,60,100,0.35);
+  --panel-bg:     rgba(255,255,255,0.9);
+  --card-border:  rgba(255,215,0,0.35);
+  --text:         #1c3c64;
+  --text2:        #5c7a9e;
+  --accent:       #f5c800;
+  --dice-bg:      #ffffff;
+  --dice-dot:     #1c3c64;
+  --dice-border:  #ffd700;
+  --snake:        #74b9e0;
+  --ladder:       #ffd700;
+  --title:        linear-gradient(135deg,#5c7a9e 0%,#ffd700 100%);
+  --win-bg:       rgba(245,200,0,0.97);
+  --roll-btn:     #f5c800;
+  --badge-bg:     rgba(245,200,0,0.15);
+  --badge-color:  #8b7000;
+}
+html.love {
+  --bg:           #fce4ec;
+  --bg2:          #f8bbd0;
+  --sq-a:         #f48fb1;
+  --sq-b:         #fce4ec;
+  --board-border: #e91e63;
+  --sq-num:       rgba(136,14,79,0.4);
+  --panel-bg:     rgba(255,240,246,0.96);
+  --card-border:  rgba(233,30,99,0.25);
+  --text:         #880e4f;
+  --text2:        #c2185b;
+  --accent:       #e91e63;
+  --dice-bg:      #fff;
+  --dice-dot:     #e91e63;
+  --dice-border:  #f48fb1;
+  --snake:        #b71c1c;
+  --ladder:       #e91e63;
+  --title:        linear-gradient(135deg,#e91e63 0%,#ff80ab 100%);
+  --win-bg:       rgba(233,30,99,0.97);
+  --roll-btn:     #e91e63;
+  --badge-bg:     rgba(233,30,99,0.12);
+  --badge-color:  #880e4f;
+}
+html.neon {
+  --bg:           #0d0d1f;
+  --bg2:          #12122a;
+  --sq-a:         #181832;
+  --sq-b:         #0f0f26;
+  --board-border: #6c63ff;
+  --sq-num:       rgba(108,99,255,0.5);
+  --panel-bg:     rgba(18,18,42,0.97);
+  --card-border:  rgba(108,99,255,0.3);
+  --text:         #e0e0ff;
+  --text2:        #8080b0;
+  --accent:       #6c63ff;
+  --dice-bg:      #181832;
+  --dice-dot:     #43e97b;
+  --dice-border:  #6c63ff;
+  --snake:        #ff4f6b;
+  --ladder:       #43e97b;
+  --title:        linear-gradient(135deg,#6c63ff 0%,#43e97b 100%);
+  --win-bg:       rgba(108,99,255,0.97);
+  --roll-btn:     #6c63ff;
+  --badge-bg:     rgba(108,99,255,0.2);
+  --badge-color:  #a78bfa;
+}
+
+/* ══════════════════════════════════════
+   LAYOUT
+══════════════════════════════════════ */
+body {
+  background: var(--bg);
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+/* ── Header ── */
+#hdr {
+  background: var(--bg2);
+  border-bottom: 1px solid var(--card-border);
+  padding: 6px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  min-height: 42px;
+}
+#hdr-title {
+  font-size: 15px;
+  font-weight: 800;
+  background: var(--title);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  flex: 1;
+  letter-spacing: .3px;
+}
+.tb { display:flex; gap:5px; align-items:center; }
+.tb-dot {
+  width:20px; height:20px; border-radius:50%;
+  border: 2px solid transparent;
+  cursor: pointer; transition: .18s;
+  flex-shrink: 0;
+}
+.tb-dot:hover, .tb-dot.on { border-color: var(--text); transform:scale(1.18); }
+#td-classic { background:linear-gradient(135deg,#9dcc96,#f5ead0); }
+#td-heaven  { background:linear-gradient(135deg,#ffd700,#e3f4ff); }
+#td-love    { background:linear-gradient(135deg,#e91e63,#fce4ec); }
+#td-neon    { background:linear-gradient(135deg,#6c63ff,#43e97b); }
+
+/* ── Main ── */
+#main {
+  flex: 1;
+  display: flex;
+  gap: 10px;
+  padding: 8px 10px;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* ── Board ── */
+#bwrap {
+  position: relative;
+  flex-shrink: 0;
+  align-self: flex-start;
+}
+#board {
+  display: grid;
+  grid-template-columns: repeat(10,50px);
+  grid-template-rows: repeat(10,50px);
+  border: 3px solid var(--board-border);
+  border-radius: 8px;
+  overflow: hidden;
+  width: 500px; height: 500px;
+  position: relative;
+  z-index: 1;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.18);
+}
+.sq {
+  position: relative;
+  width: 50px; height: 50px;
+  overflow: visible;
+}
+.sq.ea { background: var(--sq-a); }
+.sq.eb { background: var(--sq-b); }
+.sq-n {
+  position: absolute;
+  top: 2px; right: 3px;
+  font-size: 8px;
+  font-weight: 700;
+  color: var(--sq-num);
+  line-height: 1;
+  pointer-events: none;
+  z-index: 2;
+}
+.sq-tok {
+  position: absolute;
+  bottom: 3px; left: 0;
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1px;
+  padding: 0 3px;
+  z-index: 3;
+}
+.tok {
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255,255,255,0.85);
+  font-size: 7px;
+  font-weight: 900;
+  color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.4);
+  flex-shrink: 0;
+}
+.tok-red    { background: radial-gradient(circle at 35% 35%,#ff8a8a,#d32f2f); }
+.tok-blue   { background: radial-gradient(circle at 35% 35%,#8a9fff,#3949ab); }
+.tok-green  { background: radial-gradient(circle at 35% 35%,#80ffb0,#2e7d32); }
+.tok-yellow { background: radial-gradient(circle at 35% 35%,#fff080,#f57f17); }
+
+/* Canvas overlay */
+#slc {
+  position: absolute;
+  top: 0; left: 0;
+  width: 500px; height: 500px;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* ── Panel ── */
+#panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  min-width: 180px;
+  max-width: 320px;
+}
+#panel::-webkit-scrollbar { width:4px; }
+#panel::-webkit-scrollbar-thumb { background: var(--card-border); border-radius:2px; }
+
+/* Player cards */
+.pc {
+  background: var(--panel-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  padding: 7px 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: box-shadow .25s, border-color .25s;
+}
+.pc.myturn {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+.pc-tok {
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  font-size: 12px; font-weight: 800;
+  color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+  border: 2px solid rgba(255,255,255,0.55);
+}
+.pc-info { flex: 1; min-width: 0; }
+.pc-name { font-size: 12px; font-weight: 700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.pc-sq   { font-size: 10px; color: var(--text2); }
+.pc-badge {
+  font-size: 9px; font-weight: 800;
+  padding: 2px 6px; border-radius: 8px;
+  background: var(--badge-bg);
+  color: var(--badge-color);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  letter-spacing:.3px;
+}
+
+/* Dice */
+#dice-card {
+  background: var(--panel-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 9px;
+}
+#dice {
+  width: 68px; height: 68px;
+  background: var(--dice-bg);
+  border: 2px solid var(--dice-border);
+  border-radius: 14px;
+  display: grid;
+  grid-template: repeat(3,1fr)/repeat(3,1fr);
+  padding: 9px;
+  gap: 5px;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.25);
+  cursor: pointer;
+  transition: transform .12s, box-shadow .12s;
+}
+#dice:hover { transform: scale(1.05); box-shadow: 0 6px 24px rgba(0,0,0,0.2); }
+#dice:active { transform: scale(0.92); }
+#dice.spin { animation: diceRoll .5s ease-out; }
+@keyframes diceRoll {
+  0%  { transform: rotate(0)   scale(1);    }
+  20% { transform: rotate(-18deg) scale(1.12); }
+  45% { transform: rotate(28deg)  scale(0.93); }
+  65% { transform: rotate(-12deg) scale(1.06); }
+  82% { transform: rotate(7deg)   scale(0.98); }
+  100%{ transform: rotate(0)   scale(1);    }
+}
+.dot {
+  border-radius: 50%;
+  background: var(--dice-dot);
+  transition: background .15s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+.dot.off { background: transparent; box-shadow:none; }
+#roll-btn {
+  width: 100%;
+  padding: 9px 0;
+  border: none;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .4px;
+  cursor: pointer;
+  background: var(--roll-btn);
+  color: #fff;
+  transition: .18s;
+  box-shadow: 0 3px 14px color-mix(in srgb, var(--roll-btn) 45%, transparent);
+}
+#roll-btn:hover:not(:disabled) { filter:brightness(1.1); transform:translateY(-1px); }
+#roll-btn:disabled { opacity:.4; cursor:not-allowed; transform:none; }
+#turn-msg { font-size: 11px; color: var(--text2); text-align:center; line-height:1.4; }
+
+/* Log */
+#log-card {
+  background: var(--panel-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  padding: 8px 10px;
+  flex: 1;
+  min-height: 60px;
+  overflow-y: auto;
+}
+#log-card::-webkit-scrollbar { width:3px; }
+#log-card::-webkit-scrollbar-thumb { background: var(--card-border); border-radius:2px; }
+.log-hd { font-size: 9px; font-weight:800; color:var(--text2); letter-spacing:1px; margin-bottom:5px; }
+.le {
+  font-size: 10px;
+  color: var(--text2);
+  padding: 3px 0;
+  border-bottom: 1px solid var(--card-border);
+  line-height: 1.4;
+}
+.le:last-child { border-bottom: none; }
+.le b { color: var(--text); }
+
+/* ══════════════════════════════════════
+   LOBBY
+══════════════════════════════════════ */
+#lobby {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 24px;
+}
+#lb-title {
+  font-size: 26px; font-weight: 900;
+  background: var(--title);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-align: center;
+}
+#lb-sub { font-size: 13px; color: var(--text2); }
+#lb-grid {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.lp {
+  background: var(--panel-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 14px;
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  min-width: 90px;
+  transition: .2s;
+}
+.lp.filled { border-color: var(--accent); }
+.lp-circle {
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  font-size: 15px; font-weight: 800; color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  border: 2px solid rgba(255,255,255,0.5);
+}
+.lp-name { font-size: 11px; font-weight: 600; }
+.lp-you  { font-size: 9px; color: var(--accent); font-weight: 700; letter-spacing:.5px; }
+.lp-empty { opacity:.35; }
+#lb-status { font-size: 12px; color: var(--text2); animation: pulse 2s ease infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+#lb-btns { display:flex; gap:10px; }
+.lb-btn {
+  padding: 9px 26px;
+  border: none; border-radius: 9px;
+  font-size: 13px; font-weight: 700;
+  cursor: pointer; transition: .18s;
+}
+#start-btn {
+  background: var(--roll-btn);
+  color: #fff;
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--roll-btn) 40%, transparent);
+}
+#start-btn:hover:not(:disabled) { filter:brightness(1.1); transform:translateY(-1px); }
+#start-btn:disabled { opacity:.4; cursor:not-allowed; transform:none; }
+#leave-btn {
+  background: var(--panel-bg);
+  color: var(--text2);
+  border: 1px solid var(--card-border);
+}
+#leave-btn:hover { border-color:#ff4f6b; color:#ff4f6b; }
+
+/* ══════════════════════════════════════
+   WIN OVERLAY
+══════════════════════════════════════ */
+#win-ov {
+  display: none;
+  position: fixed; inset: 0;
+  background: var(--win-bg);
+  backdrop-filter: blur(10px);
+  z-index: 9999;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+#win-emoji { font-size: 72px; animation: wb 1.1s ease infinite; }
+@keyframes wb { 0%,100%{transform:scale(1) rotate(-6deg)} 50%{transform:scale(1.22) rotate(6deg)} }
+#win-title { font-size: 30px; font-weight: 900; color:#fff; text-align:center; }
+#win-sub   { font-size: 15px; color:rgba(255,255,255,0.8); text-align:center; }
+#pa-btn {
+  margin-top: 6px;
+  padding: 11px 30px;
+  background:#fff; color:var(--text);
+  border:none; border-radius:10px;
+  font-size:14px; font-weight:800;
+  cursor:pointer; transition:.18s;
+}
+#pa-btn:hover { transform:scale(1.06); }
+
+/* ══════════════════════════════════════
+   MOVE ANIMATION
+══════════════════════════════════════ */
+.tok-bounce {
+  animation: tokBounce .35s cubic-bezier(.34,1.56,.64,1);
+}
+@keyframes tokBounce {
+  0%   { transform: scale(.5);   }
+  60%  { transform: scale(1.3);  }
+  100% { transform: scale(1);    }
+}
+</style>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<div id="hdr">
+  <div id="hdr-title">🐍 Snake &amp; Ladders 🪜</div>
+  <div class="tb">
+    <div class="tb-dot on" id="td-classic" onclick="setTheme('classic')" title="Classic"></div>
+    <div class="tb-dot"    id="td-heaven"  onclick="setTheme('heaven')"  title="Heaven"></div>
+    <div class="tb-dot"    id="td-love"    onclick="setTheme('love')"    title="Love"></div>
+    <div class="tb-dot"    id="td-neon"    onclick="setTheme('neon')"    title="Neon"></div>
+  </div>
+</div>
+
+<!-- ── Lobby ── -->
+<div id="lobby">
+  <div id="lb-title">🎲 Snake &amp; Ladders</div>
+  <div id="lb-sub">Real-time · 2–4 players</div>
+  <div id="lb-grid"></div>
+  <div id="lb-status">Waiting for players…</div>
+  <div id="lb-btns">
+    <button class="lb-btn" id="start-btn" disabled onclick="startGame()">Start Game</button>
+    <button class="lb-btn" id="leave-btn" onclick="leaveGame()">Leave</button>
+  </div>
+</div>
+
+<!-- ── Game Screen ── -->
+<div id="gscreen" style="display:none">
+  <div id="main">
+    <div id="bwrap">
+      <div id="board"></div>
+      <canvas id="slc" width="500" height="500"></canvas>
+    </div>
+    <div id="panel">
+      <div id="pcards"></div>
+      <div id="dice-card">
+        <div id="dice" onclick="rollDice()">
+          <div class="dot off" id="d0"></div><div class="dot off" id="d1"></div><div class="dot off" id="d2"></div>
+          <div class="dot off" id="d3"></div><div class="dot off" id="d4"></div><div class="dot off" id="d5"></div>
+          <div class="dot off" id="d6"></div><div class="dot off" id="d7"></div><div class="dot off" id="d8"></div>
+        </div>
+        <div id="turn-msg">–</div>
+        <button id="roll-btn" disabled onclick="rollDice()">🎲 Roll Dice</button>
+      </div>
+      <div id="log-card">
+        <div class="log-hd">GAME LOG</div>
+        <div id="log"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Win Overlay ── -->
+<div id="win-ov">
+  <div id="win-emoji">🏆</div>
+  <div id="win-title">You Win!</div>
+  <div id="win-sub">You reached square 100!</div>
+  <button id="pa-btn" onclick="playAgain()">🔄 Play Again</button>
+</div>
+
+<style>
+#gscreen { display:none; flex:1; flex-direction:column; overflow:hidden; }
+#gscreen.show { display:flex; }
+</style>
+
+<script type="module">
+import { initializeApp }   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, onValue, set, get, remove, update }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import { getAuth, onAuthStateChanged }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+const FC = {
+  apiKey:"AIzaSyBUkQ3ykM5ErEKeLSfClIuaU7Qtokwg0Ek",
+  authDomain:"iitchat-ef6a0.firebaseapp.com",
+  databaseURL:"https://iitchat-ef6a0-default-rtdb.firebaseio.com",
+  projectId:"iitchat-ef6a0",
+  storageBucket:"iitchat-ef6a0.firebasestorage.app",
+  messagingSenderId:"701410820532",
+  appId:"1:701410820532:web:1c975bcfd5812c10f132e1"
+};
+const db   = getDatabase(initializeApp(FC));
+const auth = getAuth();
+const sp   = new URLSearchParams(location.search);
+const CCI  = sp.get('cci');
+const myName = decodeURIComponent(sp.get('name') || 'Player');
+
+// ══════════════════════════════════════
+//  Constants
+// ══════════════════════════════════════
+const COLORS = ['red','blue','green','yellow'];
+const COLOR_GRAD = {
+  red:    ['#ff8a8a','#d32f2f'],
+  blue:   ['#8a9fff','#3949ab'],
+  green:  ['#80ffb0','#2e7d32'],
+  yellow: ['#fff080','#f57f17'],
+};
+const SQ = 50;  // square size px
+
+// Classic Snakes & Ladders positions
+const LADDERS = {4:14, 9:31, 20:38, 28:84, 40:59, 51:67, 63:81, 71:91};
+const SNAKES  = {17:7, 54:34, 62:19, 64:60, 87:24, 93:73, 95:75, 99:78};
+
+// Dice dots: 9 positions (3×3 grid), 0=off 1=on
+const DOTS = {
+  1:[0,0,0, 0,1,0, 0,0,0],
+  2:[1,0,0, 0,0,0, 0,0,1],
+  3:[1,0,0, 0,1,0, 0,0,1],
+  4:[1,0,1, 0,0,0, 1,0,1],
+  5:[1,0,1, 0,1,0, 1,0,1],
+  6:[1,0,1, 1,0,1, 1,0,1],
+};
+
+let myUid = null;
+let gdata = null;
+let lastMoveT = 0;
+let lastDiceT = 0;
+
+// ══════════════════════════════════════
+//  Board helpers
+// ══════════════════════════════════════
+// Convert square number (1-100) → visual grid {row,col} (0=top-left)
+function s2g(n) {
+  const br = Math.floor((n-1)/10);       // board row 0=bottom
+  const bc = (n-1) % 10;
+  const vr = 9 - br;                     // visual row 0=top
+  const vc = br % 2 === 0 ? bc : 9-bc;  // odd board rows go right→left
+  return {r:vr, c:vc};
+}
+// Center pixel of square n on the 500×500 canvas
+function center(n) {
+  const {r,c} = s2g(n);
+  return {x:(c+0.5)*SQ, y:(r+0.5)*SQ};
+}
+
+// ══════════════════════════════════════
+//  Build board DOM
+// ══════════════════════════════════════
+function buildBoard() {
+  const board = document.getElementById('board');
+  board.innerHTML = '';
+  for (let vr=0; vr<10; vr++) {
+    for (let vc=0; vc<10; vc++) {
+      const br = 9-vr;
+      const bc = br%2===0 ? vc : 9-vc;
+      const n  = br*10 + bc + 1;
+      const sq = document.createElement('div');
+      sq.className = `sq ${(vr+vc)%2===0 ? 'ea':'eb'}`;
+      sq.id = `sq${n}`;
+      sq.innerHTML = `<div class="sq-n">${n}</div><div class="sq-tok" id="t${n}"></div>`;
+      board.appendChild(sq);
+    }
+  }
+}
+
+// ══════════════════════════════════════
+//  Canvas: draw snakes & ladders
+// ══════════════════════════════════════
+function drawSL() {
+  const cv  = document.getElementById('slc');
+  const ctx = cv.getContext('2d');
+  ctx.clearRect(0, 0, 500, 500);
+  const cs = getComputedStyle(document.documentElement);
+  const sc = cs.getPropertyValue('--snake').trim();
+  const lc = cs.getPropertyValue('--ladder').trim();
+  Object.entries(LADDERS).forEach(([a,b]) => drawLadder(ctx, center(+a), center(+b), lc));
+  Object.entries(SNAKES).forEach(([h,t]) => drawSnake(ctx, center(+h), center(+t), sc));
+}
+
+function drawLadder(ctx, a, b, col) {
+  const dx=b.x-a.x, dy=b.y-a.y;
+  const len=Math.sqrt(dx*dx+dy*dy);
+  const nx=-dy/len*5, ny=dx/len*5;
+  ctx.globalAlpha=.72; ctx.strokeStyle=col; ctx.lineCap='round';
+  // rails
+  [[a.x-nx,a.y-ny,b.x-nx,b.y-ny],[a.x+nx,a.y+ny,b.x+nx,b.y+ny]].forEach(([x1,y1,x2,y2])=>{
+    ctx.lineWidth=2.5; ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+  });
+  // rungs
+  const steps=Math.max(2,Math.floor(len/13));
+  ctx.lineWidth=2;
+  for(let i=1;i<=steps;i++){
+    const t=i/(steps+1);
+    const rx=a.x+dx*t, ry=a.y+dy*t;
+    ctx.beginPath(); ctx.moveTo(rx-nx,ry-ny); ctx.lineTo(rx+nx,ry+ny); ctx.stroke();
+  }
+  // base indicator (small circle at bottom)
+  ctx.globalAlpha=.9; ctx.beginPath(); ctx.arc(a.x,a.y,4,0,Math.PI*2);
+  ctx.fillStyle=col; ctx.fill();
+  ctx.globalAlpha=1;
+}
+
+function drawSnake(ctx, head, tail, col) {
+  const dx=tail.x-head.x, dy=tail.y-head.y;
+  const cx1=head.x+dx*.25+dy*.35, cy1=head.y+dy*.25-dx*.35;
+  const cx2=head.x+dx*.75-dy*.35, cy2=head.y+dy*.75+dx*.35;
+  // shadow
+  ctx.beginPath(); ctx.moveTo(head.x,head.y); ctx.bezierCurveTo(cx1,cy1,cx2,cy2,tail.x,tail.y);
+  ctx.strokeStyle='rgba(0,0,0,0.22)'; ctx.lineWidth=8; ctx.lineCap='round'; ctx.globalAlpha=1; ctx.stroke();
+  // body
+  ctx.beginPath(); ctx.moveTo(head.x,head.y); ctx.bezierCurveTo(cx1,cy1,cx2,cy2,tail.x,tail.y);
+  ctx.strokeStyle=col; ctx.lineWidth=5; ctx.globalAlpha=.78; ctx.stroke();
+  // head
+  ctx.beginPath(); ctx.arc(head.x,head.y,6.5,0,Math.PI*2);
+  ctx.fillStyle=col; ctx.globalAlpha=.95; ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,0.8)'; ctx.lineWidth=1.5; ctx.stroke();
+  // eyes
+  ctx.fillStyle='#fff'; ctx.globalAlpha=1;
+  ctx.beginPath(); ctx.arc(head.x+2,head.y-2.5,2,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(head.x-2,head.y-2.5,2,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#222';
+  ctx.beginPath(); ctx.arc(head.x+2,head.y-2.5,1,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(head.x-2,head.y-2.5,1,0,Math.PI*2); ctx.fill();
+}
+
+// ══════════════════════════════════════
+//  Dice display
+// ══════════════════════════════════════
+function showDice(v) {
+  const pat = DOTS[v] || DOTS[1];
+  for(let i=0;i<9;i++){
+    const d = document.getElementById(`d${i}`);
+    if(d) d.className = `dot ${pat[i] ? '' : 'off'}`;
+  }
+}
+
+function animDice(v) {
+  showDice(v);
+  const el = document.getElementById('dice');
+  el.classList.remove('spin');
+  void el.offsetWidth;
+  el.classList.add('spin');
+  setTimeout(()=>el.classList.remove('spin'), 520);
+}
+
+// ══════════════════════════════════════
+//  Theme
+// ══════════════════════════════════════
+window.setTheme = t => {
+  document.documentElement.className = t;
+  document.querySelectorAll('.tb-dot').forEach(b=>b.classList.remove('on'));
+  document.getElementById(`td-${t}`)?.classList.add('on');
+  drawSL();
+};
+
+// ══════════════════════════════════════
+//  Render tokens
+// ══════════════════════════════════════
+function renderTokens(players) {
+  document.querySelectorAll('.sq-tok').forEach(el=>el.innerHTML='');
+  Object.values(players||{}).forEach(p=>{
+    if(!p.pos || p.pos<1 || p.pos>100) return;
+    const box = document.getElementById(`t${p.pos}`);
+    if(!box) return;
+    const tok = document.createElement('div');
+    tok.className = `tok tok-${p.color}`;
+    tok.textContent = (p.name||'?')[0].toUpperCase();
+    tok.title = p.name;
+    tok.classList.add('tok-bounce');
+    box.appendChild(tok);
+  });
+}
+
+// ══════════════════════════════════════
+//  Render player cards
+// ══════════════════════════════════════
+function renderCards(players, turn) {
+  const el = document.getElementById('pcards');
+  el.innerHTML='';
+  Object.entries(players||{})
+    .sort((a,b)=>(a[1].order||0)-(b[1].order||0))
+    .forEach(([uid,p])=>{
+      const [c1,c2] = COLOR_GRAD[p.color]||['#999','#555'];
+      const isMe = uid===myUid;
+      const isTurn = uid===turn;
+      const card = document.createElement('div');
+      card.className = `pc${isTurn?' myturn':''}`;
+      card.innerHTML = `
+        <div class="pc-tok" style="background:radial-gradient(circle at 35% 35%,${c1},${c2})">${(p.name||'?')[0].toUpperCase()}</div>
+        <div class="pc-info">
+          <div class="pc-name">${p.name}${isMe?' (You)':''}</div>
+          <div class="pc-sq">${p.pos>0?`Square ${p.pos}`:'Start'}</div>
+        </div>
+        ${isTurn?'<div class="pc-badge">TURN</div>':''}
+      `;
+      el.appendChild(card);
+    });
+}
+
+// ══════════════════════════════════════
+//  Log
+// ══════════════════════════════════════
+function addLog(html) {
+  const log = document.getElementById('log');
+  const e = document.createElement('div');
+  e.className='le'; e.innerHTML=html;
+  log.prepend(e);
+  while(log.children.length>25) log.removeChild(log.lastChild);
+}
+
+// ══════════════════════════════════════
+//  Firebase listener
+// ══════════════════════════════════════
+function listenGame() {
+  onValue(ref(db, `games/${CCI}`), snap => {
+    const d = snap.val();
+    if(!d) return;
+    gdata = d;
+    if(d.state==='lobby')    renderLobby(d);
+    else if(d.state==='playing')  renderGame(d);
+    else if(d.state==='finished') { renderGame(d); renderWin(d); }
+  });
+}
+
+// ══════════════════════════════════════
+//  Lobby render
+// ══════════════════════════════════════
+function renderLobby(d) {
+  document.getElementById('lobby').style.display='flex';
+  document.getElementById('gscreen').classList.remove('show');
+
+  const players = d.players||{};
+  const sorted = Object.entries(players).sort((a,b)=>(a[1].order||0)-(b[1].order||0));
+  const grid = document.getElementById('lb-grid');
+  grid.innerHTML='';
+
+  sorted.forEach(([uid,p])=>{
+    const [c1,c2]=COLOR_GRAD[p.color]||['#999','#555'];
+    const isMe = uid===myUid;
+    const card = document.createElement('div');
+    card.className='lp filled';
+    card.innerHTML=`
+      <div class="lp-circle" style="background:radial-gradient(circle at 35% 35%,${c1},${c2})">${(p.name||'?')[0].toUpperCase()}</div>
+      <div class="lp-name">${p.name}</div>
+      ${isMe?'<div class="lp-you">YOU</div>':''}
+    `;
+    grid.appendChild(card);
+  });
+
+  for(let i=sorted.length;i<4;i++){
+    const e = document.createElement('div');
+    e.className='lp';
+    e.innerHTML=`<div class="lp-circle lp-empty" style="background:#ccc;font-size:20px">?</div><div class="lp-name lp-empty">Waiting…</div>`;
+    grid.appendChild(e);
+  }
+
+  const cnt = sorted.length;
+  const isHost = d.createdBy===myUid;
+  const btn = document.getElementById('start-btn');
+  btn.disabled = !(isHost && cnt>=2);
+  btn.textContent = isHost ? (cnt>=2?'▶ Start Game':`Need ${2-cnt} more`) : 'Waiting for host…';
+  document.getElementById('lb-status').textContent =
+    cnt<2 ? `${cnt}/4 joined — need at least 1 more` :
+    isHost ? `${cnt} players ready — you can start!` :
+    `${cnt} players joined — waiting for host…`;
+}
+
+// ══════════════════════════════════════
+//  Game render
+// ══════════════════════════════════════
+function renderGame(d) {
+  document.getElementById('lobby').style.display='none';
+  document.getElementById('gscreen').classList.add('show');
+
+  renderTokens(d.players);
+  renderCards(d.players, d.currentTurn);
+
+  const isMyTurn = d.currentTurn===myUid;
+  const rb = document.getElementById('roll-btn');
+  rb.disabled = !isMyTurn;
+
+  const tp = d.players?.[d.currentTurn];
+  document.getElementById('turn-msg').textContent = isMyTurn
+    ? '🎲 Your turn — roll the dice!'
+    : `${tp?.name||'?'}'s turn…`;
+
+  if(d.dice?.value && d.dice.t > lastDiceT) {
+    lastDiceT = d.dice.t;
+    animDice(d.dice.value);
+  } else if(d.dice?.value) {
+    showDice(d.dice.value);
+  }
+
+  if(d.lastMove && d.lastMove.t > lastMoveT) {
+    lastMoveT = d.lastMove.t;
+    const lm = d.lastMove;
+    const mp = d.players?.[lm.uid];
+    let msg = `<b>${mp?.name}</b> rolled ${lm.dice}`;
+    if(lm.bounced) msg += ` 🔄 bounced to ${lm.to}`;
+    else msg += ` → sq ${lm.to}`;
+    if(lm.ladder) msg += ` 🪜 +ladder → ${lm.final}!`;
+    if(lm.snake)  msg += ` 🐍 -snake → ${lm.final}!`;
+    addLog(msg);
+  }
+}
+
+// ══════════════════════════════════════
+//  Win render
+// ══════════════════════════════════════
+function renderWin(d) {
+  const w = d.players?.[d.winner];
+  const isMe = d.winner===myUid;
+  document.getElementById('win-ov').style.display='flex';
+  document.getElementById('win-emoji').textContent = isMe?'🏆':'🎊';
+  document.getElementById('win-title').textContent = isMe?'You Win! 🎉':`${w?.name||'?'} Wins!`;
+  document.getElementById('win-sub').textContent   = isMe?'You reached square 100!':'Better luck next time!';
+  document.getElementById('pa-btn').style.display  = d.createdBy===myUid?'block':'none';
+}
+
+// ══════════════════════════════════════
+//  Roll dice
+// ══════════════════════════════════════
+window.rollDice = async () => {
+  if(!gdata || gdata.currentTurn!==myUid || gdata.state!=='playing') return;
+  const me = gdata.players?.[myUid];
+  if(!me) return;
+
+  document.getElementById('roll-btn').disabled = true;
+
+  const val = Math.floor(Math.random()*6)+1;
+  const cur = me.pos || 0;
+  let raw = cur + val;
+  let bounced = false;
+
+  if(raw > 100) { raw = 200 - raw; bounced = true; }
+  if(raw < 1)   raw = 1;
+
+  let final = raw;
+  let ladder = false, snake = false;
+  if(!bounced && LADDERS[raw]) { final = LADDERS[raw]; ladder = true; }
+  else if(!bounced && SNAKES[raw]) { final = SNAKES[raw]; snake = true; }
+
+  const won = final === 100;
+  const players = gdata.players||{};
+  const order = Object.entries(players).sort((a,b)=>(a[1].order||0)-(b[1].order||0)).map(e=>e[0]);
+  const nextIdx = (order.indexOf(myUid)+1) % order.length;
+  const nextTurn = won ? myUid : order[nextIdx];
+  const now = Date.now();
+
+  await update(ref(db,`games/${CCI}`), {
+    [`players/${myUid}/pos`]: final,
+    dice:      { value:val, t:now },
+    lastMove:  { uid:myUid, dice:val, from:cur, to:raw, final, bounced, ladder, snake, t:now },
+    currentTurn: nextTurn,
+    ...(won ? { state:'finished', winner:myUid } : {})
+  });
+};
+
+// ══════════════════════════════════════
+//  Start / Leave / Play Again
+// ══════════════════════════════════════
+window.startGame = async () => {
+  if(!gdata || gdata.createdBy!==myUid) return;
+  const uids = Object.keys(gdata.players||{});
+  if(uids.length < 2) return;
+  uids.sort(()=>Math.random()-.5);
+  const ups = { state:'playing', currentTurn:uids[0], winner:null, dice:null, lastMove:null };
+  uids.forEach((uid,i)=>{ ups[`players/${uid}/order`]=i; ups[`players/${uid}/pos`]=0; });
+  await update(ref(db,`games/${CCI}`), ups);
+};
+
+window.leaveGame = () => {
+  if(myUid && CCI) remove(ref(db,`games/${CCI}/players/${myUid}`)).catch(()=>{});
+  window.close();
+};
+
+window.playAgain = async () => {
+  if(!gdata || gdata.createdBy!==myUid) return;
+  const ups = { state:'lobby', currentTurn:null, winner:null, dice:null, lastMove:null };
+  Object.keys(gdata.players||{}).forEach(uid=>{ ups[`players/${uid}/pos`]=0; });
+  await update(ref(db,`games/${CCI}`), ups);
+  document.getElementById('win-ov').style.display='none';
+  document.getElementById('log').innerHTML='';
+};
+
+// ══════════════════════════════════════
+//  Join / create
+// ══════════════════════════════════════
+async function joinGame(user) {
+  myUid = user.uid;
+  const snap = await get(ref(db,`games/${CCI}`));
+  const d = snap.val();
+
+  if(!d) {
+    await set(ref(db,`games/${CCI}`), {
+      state:'lobby', createdBy:myUid,
+      players:{ [myUid]:{ name:myName, color:COLORS[0], pos:0, order:0 } }
+    });
+  } else {
+    if(!d.players?.[myUid]) {
+      const cnt = Object.keys(d.players||{}).length;
+      if(cnt >= 4)          { alert('Game is full (max 4 players)'); return; }
+      if(d.state!=='lobby') { alert('Game already in progress'); return; }
+      await update(ref(db,`games/${CCI}/players`), {
+        [myUid]:{ name:myName, color:COLORS[cnt%COLORS.length], pos:0, order:cnt }
+      });
+    }
+  }
+  listenGame();
+}
+
+// ══════════════════════════════════════
+//  Init
+// ══════════════════════════════════════
+buildBoard();
+showDice(1);
+
+if(!CCI) { document.body.innerHTML='<p style="padding:20px;color:red">No session ID</p>'; }
+else {
+  onAuthStateChanged(auth, u => {
+    if(!u) { document.body.innerHTML='<p style="padding:20px;color:red">Sign in to IIT Chat first</p>'; return; }
+    joinGame(u);
+    // draw snakes/ladders after brief delay so theme vars are computed
+    setTimeout(drawSL, 80);
+  });
+}
+
+window.addEventListener('beforeunload', () => {
+  if(myUid && CCI && gdata?.state==='lobby')
+    remove(ref(db,`games/${CCI}/players/${myUid}`)).catch(()=>{});
+});
+</script>
+</body>
+</html>

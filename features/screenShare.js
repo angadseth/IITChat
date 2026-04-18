@@ -1,7 +1,6 @@
 // ══════════════════════════════════════════════════════
 //  features/screenShare.js  —  WebRTC screen sharing
-//  Sharer  : getDisplayMedia → Firebase signaling → peer
-//  Viewer  : screenshare.html opened in new window
+//  + real-time cursor sync for both sharer & viewer
 // ══════════════════════════════════════════════════════
 
 const ICE_CFG = {
@@ -16,13 +15,11 @@ export function initScreenShare(db, dbRef, dbSet, dbGet, dbOnValue, dbRemove, db
 
   let pc          = null;
   let localStream = null;
-  let unsubOffer  = null;
+  let unsubIncoming = null;
   let unsubAns    = null;
   let unsubVICE   = null;
-  let currentCCI  = null;
-
-  // ── helper: Firebase path for this session ──
-  const ssRef = (path = '') => dbRef(db, `screenShare/${currentCCI}${path ? '/' + path : ''}`);
+  let cursorUnsub = null;
+  let cursorThrottle = 0;
 
   // ── Show/hide sharer indicator ──
   function setShareUI(active) {
@@ -53,24 +50,58 @@ export function initScreenShare(db, dbRef, dbSet, dbGet, dbOnValue, dbRemove, db
       <span><b>${sharerName}</b> is sharing their screen</span>
       <button class="ss-watch-btn" onclick="ssWatch()">Watch</button>
       <button class="ss-watch-close" onclick="document.getElementById('ss-watch-bar')?.remove()">✕</button>`;
-    bar.classList.remove('hidden');
   }
 
   function hideWatchBar() {
     document.getElementById('ss-watch-bar')?.remove();
   }
 
-  // ── Called when chat opens (listen for incoming share) ──
-  window.ssInit = (cci) => {
-    currentCCI = cci;
-    unsubOffer?.();
-    hideWatchBar();
+  // ── Sharer cursor overlay (shows viewer's cursor on sharer screen) ──
+  function ensureSharerOverlay() {
+    if (document.getElementById('ss-cursor-overlay')) return;
+    const ov = document.createElement('div');
+    ov.id = 'ss-cursor-overlay';
+    ov.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9999;';
+    document.body.appendChild(ov);
+  }
 
-    unsubOffer = dbOnValue(dbRef(db, `screenShare/${cci}`), snap => {
+  function showViewerCursorOnSharer(x, y, name) {
+    ensureSharerOverlay();
+    let dot = document.getElementById('ss-viewer-dot');
+    if (!dot) {
+      dot = document.createElement('div');
+      dot.id = 'ss-viewer-dot';
+      dot.innerHTML = `<svg width="20" height="20" viewBox="0 0 20 20"><path d="M2 2l12 5-5 2-3 8z" fill="#43e97b" stroke="#fff" stroke-width="1"/></svg><span style="background:#43e97b;color:#fff;font-size:10px;padding:1px 5px;border-radius:4px;margin-left:2px;white-space:nowrap"></span>`;
+      dot.style.cssText = 'position:fixed;pointer-events:none;transform:translate(0,0);z-index:9999;transition:left 0.05s,top 0.05s;';
+      document.getElementById('ss-cursor-overlay')?.appendChild(dot);
+    }
+    dot.querySelector('span').textContent = name || 'Viewer';
+    // x,y are 0-1 normalized to sharer's screen
+    dot.style.left = (x * window.screen.width)  + 'px';
+    dot.style.top  = (y * window.screen.height) + 'px';
+  }
+
+  // ── Called when chat opens ──
+  window.ssInit = (cci) => {
+    unsubIncoming?.();
+    cursorUnsub?.();
+    hideWatchBar();
+    document.getElementById('ss-cursor-overlay')?.remove();
+
+    unsubIncoming = dbOnValue(dbRef(db, `screenShare/${cci}`), snap => {
       const data = snap.val();
       const { CU } = getState();
       if (!data || !data.active) { hideWatchBar(); return; }
-      if (data.by === CU?.uid) return; // don't show to self
+      if (data.by === CU?.uid) {
+        // I'm the sharer — listen for viewer cursor
+        cursorUnsub?.();
+        cursorUnsub = dbOnValue(dbRef(db, `screenShare/${cci}/cursors/viewer`), s => {
+          const c = s.val();
+          if (c) showViewerCursorOnSharer(c.x, c.y, c.name);
+          else   document.getElementById('ss-viewer-dot')?.remove();
+        });
+        return;
+      }
       showWatchBar(data.sharerName || 'Partner');
     });
   };
@@ -79,29 +110,47 @@ export function initScreenShare(db, dbRef, dbSet, dbGet, dbOnValue, dbRemove, db
   window.startSS = async () => {
     const { CU, CCI } = getState();
     if (!CCI) { toastFn('Open a chat first'); return; }
-
-    // already sharing? stop
     if (localStream) { window.stopSS(); return; }
-
-    currentCCI = CCI;
 
     try {
       localStream = await navigator.mediaDevices.getDisplayMedia({
-        video: { cursor: 'always', frameRate: 30 },
+        video: { cursor: 'never', frameRate: { ideal: 30, max: 60 }, width: { ideal: 1920 }, height: { ideal: 1080 } },
         audio: false
       });
-    } catch { return; } // user cancelled picker
+    } catch { return; }
 
     pc = new RTCPeerConnection(ICE_CFG);
-    localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
 
-    // stop when browser stop button clicked
+    // prioritize low latency
+    const sender = pc.addTrack(localStream.getVideoTracks()[0], localStream);
+    try {
+      const params = sender.getParameters();
+      if (!params.encodings) params.encodings = [{}];
+      params.encodings[0].networkPriority = 'high';
+      params.encodings[0].priority        = 'high';
+      await sender.setParameters(params);
+    } catch {}
+
     localStream.getVideoTracks()[0].onended = () => window.stopSS();
 
-    // push ICE candidates to Firebase
     pc.onicecandidate = e => {
       if (e.candidate) dbPush(dbRef(db, `screenShare/${CCI}/ice_sharer`), e.candidate.toJSON());
     };
+
+    // track own mouse — push normalized to Firebase
+    const onMouseMove = (e) => {
+      const now = Date.now();
+      if (now - cursorThrottle < 50) return; // 20fps cursor
+      cursorThrottle = now;
+      const { CU } = getState();
+      dbSet(dbRef(db, `screenShare/${CCI}/cursors/sharer`), {
+        x: e.screenX / (window.screen.width  || 1920),
+        y: e.screenY / (window.screen.height || 1080),
+        name: CU?.displayName || 'You'
+      });
+    };
+    document.addEventListener('mousemove', onMouseMove);
+    localStream.getVideoTracks()[0]._onMouseMove = onMouseMove; // save ref to remove later
 
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
@@ -110,16 +159,16 @@ export function initScreenShare(db, dbRef, dbSet, dbGet, dbOnValue, dbRemove, db
       active:      true,
       by:          CU.uid,
       sharerName:  CU.displayName || 'Partner',
+      screenW:     window.screen.width,
+      screenH:     window.screen.height,
       offer:       { sdp: offer.sdp, type: offer.type }
     });
 
-    // wait for viewer answer
     unsubAns = dbOnValue(dbRef(db, `screenShare/${CCI}/answer`), async snap => {
       if (!snap.val() || pc?.remoteDescription) return;
       await pc.setRemoteDescription(new RTCSessionDescription(snap.val()));
     });
 
-    // viewer ICE candidates
     unsubVICE = dbOnValue(dbRef(db, `screenShare/${CCI}/ice_viewer`), snap => {
       snap.forEach(c => pc?.addIceCandidate(new RTCIceCandidate(c.val())).catch(() => {}));
     });
@@ -131,20 +180,24 @@ export function initScreenShare(db, dbRef, dbSet, dbGet, dbOnValue, dbRemove, db
   // ── Stop sharing ──
   window.stopSS = async () => {
     const { CCI } = getState();
+    const track = localStream?.getVideoTracks()[0];
+    if (track?._onMouseMove) document.removeEventListener('mousemove', track._onMouseMove);
     localStream?.getTracks().forEach(t => t.stop());
     pc?.close();
     pc = null; localStream = null;
     unsubAns?.(); unsubVICE?.();
+    document.getElementById('ss-cursor-overlay')?.remove();
     if (CCI) await dbRemove(dbRef(db, `screenShare/${CCI}`));
     setShareUI(false);
     toastFn('🖥️ Screen share stopped');
   };
 
-  // ── Viewer opens new window ──
+  // ── Open viewer window ──
   window.ssWatch = () => {
-    const { CCI } = getState();
+    const { CCI, CU } = getState();
     if (!CCI) return;
-    const url = `screenshare.html?cci=${encodeURIComponent(CCI)}`;
+    const name = encodeURIComponent(CU?.displayName || 'Viewer');
+    const url  = `screenshare.html?cci=${encodeURIComponent(CCI)}&name=${name}`;
     window.open(url, '_blank', 'width=1280,height=760,menubar=no,toolbar=no,location=no,status=no');
   };
 }

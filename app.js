@@ -768,8 +768,8 @@ window.vnStart = async () => {
     ? 'audio/webm;codecs=opus'
     : MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '';
   vnRecorder = mimeType ? new MediaRecorder(vnStream, { mimeType }) : new MediaRecorder(vnStream);
-  vnRecorder.ondataavailable = e => { if (e.data.size > 0) vnChunks.push(e.data); };
-  vnRecorder.start(100); // collect chunks every 100ms
+  vnRecorder.ondataavailable = e => { if (e.data?.size > 0) vnChunks.push(e.data); };
+  vnRecorder.start(); // single chunk on stop — most reliable across browsers
 
   vnShowRecBar(true);
   el('vn-timer').textContent = '0:00';
@@ -791,6 +791,7 @@ window.vnStopSend = () => {
     vnStream?.getTracks().forEach(t => t.stop());
     vnDoSend(mimeType, duration);
   };
+  vnRecorder.requestData(); // flush any buffered audio
   vnRecorder.stop();
 };
 

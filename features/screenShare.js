@@ -195,8 +195,16 @@ export function initScreenShare(db, dbRef, dbSet, dbGet, dbOnValue, dbRemove, db
       snap.forEach(c => pc?.addIceCandidate(new RTCIceCandidate(c.val())).catch(() => {}));
     });
 
+    // open transparent overlay window — sharer positions it over YouTube
+    const ow = window.open(
+      `ss-overlay.html?cci=${encodeURIComponent(CCI)}&w=${window.innerWidth}&h=${window.innerHeight}`,
+      'ss-overlay',
+      `width=${window.screen.width},height=${window.screen.height},top=0,left=0,menubar=no,toolbar=no,location=no,status=no`
+    );
+    if (ow) localStream.getVideoTracks()[0]._overlayWin = ow;
+
     setShareUI(true);
-    toastFn('🖥️ Screen sharing started');
+    toastFn('🖥️ Sharing started — position the overlay window over your content');
   };
 
   // ─────────────────────────────────────────
@@ -206,6 +214,7 @@ export function initScreenShare(db, dbRef, dbSet, dbGet, dbOnValue, dbRemove, db
     const { CCI } = getState();
     const track = localStream?.getVideoTracks()[0];
     if (track?._onMouse) document.removeEventListener('mousemove', track._onMouse);
+    track?._overlayWin?.close();
     localStream?.getTracks().forEach(t => t.stop());
     pc?.close();
     pc = null; localStream = null;

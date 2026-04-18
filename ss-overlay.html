@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>SS Overlay</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body {
+    width:100vw; height:100vh;
+    background: rgba(0,0,0,0.01);
+    overflow:hidden;
+    font-family: system-ui, sans-serif;
+  }
+  #dot {
+    position: fixed;
+    pointer-events: none;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    transition: left .04s linear, top .04s linear;
+  }
+  #dot svg { filter: drop-shadow(0 0 6px rgba(67,233,123,0.9)); }
+  #dot .lbl {
+    background: #43e97b;
+    color: #000;
+    font-size: 11px;
+    font-weight: 800;
+    padding: 2px 8px;
+    border-radius: 20px;
+    white-space: nowrap;
+    box-shadow: 0 0 10px rgba(67,233,123,0.6);
+  }
+  /* ripple on dot */
+  #ripple {
+    position: fixed;
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    border: 2px solid rgba(67,233,123,0.6);
+    pointer-events: none;
+    display: none;
+    transform: translate(-50%, -50%);
+    animation: rp 1s ease-out infinite;
+  }
+  @keyframes rp {
+    0%   { transform:translate(-50%,-50%) scale(.5); opacity:1; }
+    100% { transform:translate(-50%,-50%) scale(2);  opacity:0; }
+  }
+</style>
+</head>
+<body>
+<div id="ripple"></div>
+<div id="dot">
+  <svg width="26" height="26" viewBox="0 0 20 20">
+    <path d="M2 2l12 5-5 2-3 8z" fill="#43e97b" stroke="#fff" stroke-width="1.4"/>
+  </svg>
+  <div class="lbl" id="lbl">Viewer</div>
+</div>
+
+<script type="module">
+import { initializeApp }  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+const FC = {
+  apiKey:            "AIzaSyBUkQ3ykM5ErEKeLSfClIuaU7Qtokwg0Ek",
+  authDomain:        "iitchat-ef6a0.firebaseapp.com",
+  databaseURL:       "https://iitchat-ef6a0-default-rtdb.firebaseio.com",
+  projectId:         "iitchat-ef6a0",
+  storageBucket:     "iitchat-ef6a0.firebasestorage.app",
+  messagingSenderId: "701410820532",
+  appId:             "1:701410820532:web:1c975bcfd5812c10f132e1"
+};
+
+const db  = getDatabase(initializeApp(FC));
+const p   = new URLSearchParams(location.search);
+const CCI = p.get('cci');
+const vpW = parseInt(p.get('w') || window.screen.width);
+const vpH = parseInt(p.get('h') || window.screen.height);
+
+if (!CCI) { document.body.innerHTML = '<p style="color:red;padding:20px">No session</p>'; }
+else {
+  onValue(ref(db, `screenShare/${CCI}/cursors/viewer`), snap => {
+    const c   = snap.val();
+    const dot = document.getElementById('dot');
+    const rip = document.getElementById('ripple');
+
+    if (!c) {
+      dot.style.display = 'none';
+      rip.style.display = 'none';
+      return;
+    }
+
+    // map 0-1 (sharer viewport) → this window's pixels
+    const px = c.x * window.innerWidth;
+    const py = c.y * window.innerHeight;
+
+    dot.style.display = 'flex';
+    dot.style.left    = (px - 4)  + 'px';
+    dot.style.top     = (py - 4)  + 'px';
+    rip.style.display = 'block';
+    rip.style.left    = px + 'px';
+    rip.style.top     = py + 'px';
+    document.getElementById('lbl').textContent = c.name || 'Viewer';
+  });
+}
+</script>
+</body>
+</html>

@@ -77,32 +77,58 @@ const CCI = p.get('cci');
 const vpW = parseInt(p.get('w') || window.screen.width);
 const vpH = parseInt(p.get('h') || window.screen.height);
 
+function moveDot(nx, ny, name) {
+  const dot = document.getElementById('dot');
+  const rip = document.getElementById('ripple');
+  const px  = nx * window.innerWidth;
+  const py  = ny * window.innerHeight;
+  dot.style.display = 'flex';
+  dot.style.left    = (px - 4) + 'px';
+  dot.style.top     = (py - 4) + 'px';
+  rip.style.display = 'block';
+  rip.style.left    = px + 'px';
+  rip.style.top     = py + 'px';
+  document.getElementById('lbl').textContent = name || 'Viewer';
+}
+
+function spawnClick(nx, ny) {
+  const el  = document.createElement('div');
+  const px  = nx * window.innerWidth;
+  const py  = ny * window.innerHeight;
+  el.style.cssText = `position:fixed;left:${px}px;top:${py}px;width:44px;height:44px;border-radius:50%;border:3px solid #43e97b;transform:translate(-50%,-50%) scale(.2);pointer-events:none;animation:clkRip .5s ease-out forwards;`;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 550);
+}
+
+// inject click ripple keyframes once
+const ks = document.createElement('style');
+ks.textContent = '@keyframes clkRip{to{transform:translate(-50%,-50%) scale(2.5);opacity:0;}}';
+document.head.appendChild(ks);
+
 if (!CCI) { document.body.innerHTML = '<p style="color:red;padding:20px">No session</p>'; }
 else {
+  // cursor from Firebase
   onValue(ref(db, `screenShare/${CCI}/cursors/viewer`), snap => {
-    const c   = snap.val();
-    const dot = document.getElementById('dot');
-    const rip = document.getElementById('ripple');
-
+    const c = snap.val();
     if (!c) {
-      dot.style.display = 'none';
-      rip.style.display = 'none';
+      document.getElementById('dot').style.display    = 'none';
+      document.getElementById('ripple').style.display = 'none';
       return;
     }
+    moveDot(c.x, c.y, c.name);
+  });
 
-    // map 0-1 (sharer viewport) → this window's pixels
-    const px = c.x * window.innerWidth;
-    const py = c.y * window.innerHeight;
-
-    dot.style.display = 'flex';
-    dot.style.left    = (px - 4)  + 'px';
-    dot.style.top     = (py - 4)  + 'px';
-    rip.style.display = 'block';
-    rip.style.left    = px + 'px';
-    rip.style.top     = py + 'px';
-    document.getElementById('lbl').textContent = c.name || 'Viewer';
+  // click ripple from Firebase (sent by screenShare.js via postMessage relay)
+  onValue(ref(db, `screenShare/${CCI}/clicks`), snap => {
+    const c = snap.val();
+    if (c) spawnClick(c.x, c.y);
   });
 }
+
+// also accept postMessage from parent (screenShare.js relay)
+window.addEventListener('message', e => {
+  if (e.data?.type === 'click') spawnClick(e.data.x, e.data.y);
+});
 </script>
 </body>
 </html>

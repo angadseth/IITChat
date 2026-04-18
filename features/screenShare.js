@@ -144,13 +144,7 @@ export function initScreenShare(db, dbRef, dbSet, dbGet, dbOnValue, dbRemove, db
       if (!data?.active) { hideWatchBar(); document.getElementById('ss-viewer-dot')?.remove(); return; }
 
       if (data.by === CU?.uid) {
-        // I am sharer — watch viewer cursor
-        unsubViewerCur?.();
-        unsubViewerCur = dbOnValue(dbRef(db, `screenShare/${cci}/cursors/viewer`), s => {
-          const c = s.val();
-          if (c) setCursorDot('ss-viewer-dot', '#43e97b', c.name || 'Viewer', c.x, c.y);
-          else   document.getElementById('ss-viewer-dot')?.remove();
-        });
+        // I am sharer — cursor shown ONLY in ss-overlay.html, not here
 
         // watch for control request
         unsubControl?.();
@@ -159,12 +153,10 @@ export function initScreenShare(db, dbRef, dbSet, dbGet, dbOnValue, dbRemove, db
           if (r?.pending) showControlRequest(r.name || 'Viewer');
         });
 
-        // watch for clicks from viewer
+        // watch for clicks from viewer — show ripple in overlay window via postMessage
         dbOnValue(dbRef(db, `screenShare/${cci}/clicks`), s => {
           const c = s.val();
           if (!c || !controlGranted) return;
-          spawnClickRipple(c.x, c.y, '#43e97b');
-          // also forward to overlay window
           overlayWin?.postMessage({ type:'click', x:c.x, y:c.y }, '*');
         });
         return;

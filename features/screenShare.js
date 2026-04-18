@@ -71,14 +71,24 @@ export function initScreenShare(db, dbRef, dbSet, dbGet, dbOnValue, dbRemove, db
     if (!dot) {
       dot = document.createElement('div');
       dot.id = 'ss-viewer-dot';
-      dot.innerHTML = `<svg width="20" height="20" viewBox="0 0 20 20"><path d="M2 2l12 5-5 2-3 8z" fill="#43e97b" stroke="#fff" stroke-width="1"/></svg><span style="background:#43e97b;color:#fff;font-size:10px;padding:1px 5px;border-radius:4px;margin-left:2px;white-space:nowrap"></span>`;
-      dot.style.cssText = 'position:fixed;pointer-events:none;transform:translate(0,0);z-index:9999;transition:left 0.05s,top 0.05s;';
-      document.getElementById('ss-cursor-overlay')?.appendChild(dot);
+      dot.innerHTML = `
+        <svg width="22" height="22" viewBox="0 0 20 20">
+          <path d="M2 2l12 5-5 2-3 8z" fill="#43e97b" stroke="#fff" stroke-width="1.2"/>
+        </svg>
+        <span style="background:#43e97b;color:#fff;font-size:10px;font-weight:700;
+          padding:2px 6px;border-radius:5px;margin-left:2px;white-space:nowrap;
+          font-family:system-ui,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,0.4)"></span>`;
+      dot.style.cssText = 'position:fixed;pointer-events:none;z-index:2147483647;display:flex;align-items:flex-start;transition:left 0.04s linear,top 0.04s linear;';
+      document.getElementById('ss-cursor-overlay').appendChild(dot);
     }
     dot.querySelector('span').textContent = name || 'Viewer';
-    // x,y are 0-1 normalized to sharer's screen
-    dot.style.left = (x * window.screen.width)  + 'px';
-    dot.style.top  = (y * window.screen.height) + 'px';
+    // Convert normalised screen coords → viewport coords
+    // window.screenX/Y = browser window's position on the physical screen
+    const titleBarH = window.outerHeight - window.innerHeight;
+    const vpX = (x * window.screen.width)  - window.screenX;
+    const vpY = (y * window.screen.height) - window.screenY - titleBarH;
+    dot.style.left = vpX + 'px';
+    dot.style.top  = vpY + 'px';
   }
 
   // ── Called when chat opens ──

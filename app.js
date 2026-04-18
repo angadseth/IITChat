@@ -61,7 +61,7 @@ initMsgMenu(() => ({ CU, CCT }), () => el('msgi')?.focus());
 // ── feature: screen share ──
 initScreenShare(db, ref, set, get, onValue, remove, push, update, () => ({ CU, CCI, CCT }), toast);
 // ── feature: snake & ladders game ──
-initSnakeGame(() => ({ CU, CCI }), toast);
+initSnakeGame(db, ref, set, get, onValue, remove, update, () => ({ CU, CCI }), toast);
 
 // ── state ──
 let CU       = null;   // current user

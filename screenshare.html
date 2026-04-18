@@ -84,7 +84,6 @@
   <div class="tb-label">Live — <b id="sname">Partner</b></div>
   <span class="tb-badge" id="ptr-badge">🖱 Pointer OFF</span>
   <button class="tb-btn" id="ptr-btn" onclick="togglePtr()">Enable Pointer</button>
-  <button class="tb-btn" id="ctrl-btn" onclick="requestControl()">🖥 Request Control</button>
   <button class="tb-btn" onclick="toggleFS()">⛶ Fullscreen</button>
 </div>
 
@@ -133,8 +132,8 @@ const p      = new URLSearchParams(location.search);
 const CCI    = p.get('cci');
 const myName = decodeURIComponent(p.get('name') || 'Viewer');
 
-let pointerOn  = false;
-let vpW = 1280, vpH = 720; // sharer's viewport dimensions
+let pointerOn = false;
+let vpW = 1280, vpH = 720;
 let curTh = 0;
 
 // ── utils ──
@@ -221,16 +220,6 @@ window.togglePtr = () => {
   }
 };
 
-// ── request control ──
-let controlGranted = false;
-window.requestControl = () => {
-  if (!CCI) return;
-  const btn = el('ctrl-btn');
-  set(ref(db, `screenShare/${CCI}/controlReq`), { pending: true, name: myName });
-  btn.textContent = '⏳ Waiting…';
-  btn.disabled = true;
-};
-
 function spawnClickRipple(px, py) {
   const rip = document.createElement('div');
   rip.style.cssText = `position:absolute;left:${px}px;top:${py}px;width:32px;height:32px;border-radius:50%;border:2.5px solid #43e97b;transform:translate(-50%,-50%) scale(.3);pointer-events:none;animation:rip .5s ease-out forwards;`;
@@ -304,7 +293,7 @@ async function connect(CU) {
 
   // ── viewer cursor + click → green dot on video ──
   el('cov').addEventListener('mousemove', e => {
-    if (!pointerOn && !controlGranted) return;
+    if (!pointerOn) return;
     const now = Date.now();
     if (now - curTh < 40) return;
     curTh = now;
@@ -318,35 +307,9 @@ async function connect(CU) {
     set(ref(db, `screenShare/${CCI}/cursors/viewer`), { x:n.x, y:n.y, name:myName });
   });
 
-  el('cov').addEventListener('click', e => {
-    if (!controlGranted) return;
-    const wr = el('vwrap').getBoundingClientRect();
-    const px = e.clientX - wr.left;
-    const py = e.clientY - wr.top;
-    const n  = overlayPxToSharerNorm(px, py);
-    spawnClickRipple(px, py);
-    // push click to Firebase — sharer sees ripple on their screen
-    set(ref(db, `screenShare/${CCI}/clicks`), { x:n.x, y:n.y, t:Date.now() });
-  });
-
   el('cov').addEventListener('mouseleave', () => {
     el('dot-viewer')?.remove();
     set(ref(db, `screenShare/${CCI}/cursors/viewer`), null).catch(() => {});
-  });
-
-  // ── control grant status ──
-  onValue(ref(db, `screenShare/${CCI}/control`), s => {
-    const v = s.val();
-    const btn = el('ctrl-btn');
-    if (v?.granted) {
-      controlGranted = true;
-      if (btn) { btn.textContent = '🖥 Control ON'; btn.classList.add('on'); btn.disabled = false; }
-      // auto-enable pointer too
-      if (!pointerOn) window.togglePtr();
-    } else if (v?.granted === false) {
-      controlGranted = false;
-      if (btn) { btn.textContent = '🖥 Request Control'; btn.disabled = false; btn.classList.remove('on'); }
-    }
   });
 
   // ── share ended ──
@@ -356,7 +319,6 @@ async function connect(CU) {
 
   window.addEventListener('beforeunload', () => {
     set(ref(db, `screenShare/${CCI}/cursors/viewer`), null).catch(() => {});
-    set(ref(db, `screenShare/${CCI}/controlReq`), null).catch(() => {});
   });
 }
 </script>

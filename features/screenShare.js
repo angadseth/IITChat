@@ -23,67 +23,6 @@ export function initScreenShare(db, dbRef, dbSet, dbGet, dbOnValue, dbRemove, db
   let cursorThrottle = 0;
   let overlayWin     = null;
 
-  // ─────────────────────────────────────────────────────
-  //  Viewer Cursor HUD — fallback when overlay can't open
-  //  (tab-only share or popup blocked)
-  // ─────────────────────────────────────────────────────
-  function ensureHUD() {
-    if (document.getElementById('ss-hud')) return;
-    const hud = document.createElement('div');
-    hud.id = 'ss-hud';
-    hud.style.cssText = `
-      position:fixed; bottom:90px; right:16px; z-index:9999;
-      background:rgba(13,13,31,0.92); border:1px solid rgba(108,99,255,0.35);
-      border-radius:12px; padding:8px 10px; pointer-events:none;
-      backdrop-filter:blur(10px); min-width:130px;
-      box-shadow:0 4px 20px rgba(0,0,0,0.5);
-      font-family:system-ui,sans-serif;
-    `;
-    hud.innerHTML = `
-      <div style="font-size:10px;font-weight:700;color:#a78bfa;margin-bottom:6px;display:flex;align-items:center;gap:5px">
-        <span style="width:6px;height:6px;border-radius:50%;background:#43e97b;display:inline-block;animation:hudBlink 1s ease infinite"></span>
-        Viewer pointer
-      </div>
-      <canvas id="ss-hud-cv" width="110" height="62"
-        style="border-radius:6px;background:#1a1a2e;display:block;"></canvas>
-      <div id="ss-hud-name" style="font-size:9px;color:#9090b0;margin-top:4px;text-align:center"></div>
-    `;
-    const style = document.createElement('style');
-    style.textContent = '@keyframes hudBlink{0%,100%{opacity:1}50%{opacity:.2}}';
-    document.head.appendChild(style);
-    document.body.appendChild(hud);
-  }
-
-  function updateHUD(nx, ny, name) {
-    ensureHUD();
-    const cv  = document.getElementById('ss-hud-cv');
-    const nm  = document.getElementById('ss-hud-name');
-    if (!cv) return;
-    const ctx = cv.getContext('2d');
-    const W = cv.width, H = cv.height;
-    ctx.clearRect(0, 0, W, H);
-    ctx.strokeStyle = 'rgba(108,99,255,0.3)';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(1, 1, W-2, H-2);
-    const px = nx * W, py = ny * H;
-    ctx.beginPath();
-    ctx.arc(px, py, 8, 0, Math.PI*2);
-    ctx.fillStyle = 'rgba(67,233,123,0.15)';
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(px, py, 4, 0, Math.PI*2);
-    ctx.fillStyle = '#43e97b';
-    ctx.fill();
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-    if (nm) nm.textContent = name || 'Viewer';
-  }
-
-  function removeHUD() {
-    document.getElementById('ss-hud')?.remove();
-  }
-
   // ─────────────────────────────────
   //  Control request UI (sharer side)
   // ─────────────────────────────────
@@ -150,22 +89,14 @@ export function initScreenShare(db, dbRef, dbSet, dbGet, dbOnValue, dbRemove, db
   window.ssInit = (cci) => {
     unsubIncoming?.(); unsubControl?.(); unsubViewerCur?.();
     unsubViewerCur = null;
-    hideWatchBar(); removeHUD();
+    hideWatchBar();
 
     unsubIncoming = dbOnValue(dbRef(db, `screenShare/${cci}`), snap => {
       const data = snap.val();
       const { CU } = getState();
-      if (!data?.active) { hideWatchBar(); removeHUD(); return; }
+      if (!data?.active) { hideWatchBar(); return; }
 
       if (data.by === CU?.uid) {
-        // I am sharer — watch viewer cursor → HUD (fallback when overlay not open)
-        if (!unsubViewerCur) {
-          unsubViewerCur = dbOnValue(dbRef(db, `screenShare/${cci}/cursors/viewer`), s => {
-            const c = s.val();
-            if (c && !overlayWin) updateHUD(c.x, c.y, c.name);
-            else removeHUD();
-          });
-        }
         if (!unsubControl) {
           unsubControl = dbOnValue(dbRef(db, `screenShare/${cci}/controlReq`), s => {
             const r = s.val();
@@ -219,10 +150,6 @@ export function initScreenShare(db, dbRef, dbSet, dbGet, dbOnValue, dbRemove, db
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
 
-    // Detect share type — 'monitor' = full screen, 'window' or 'browser' = partial
-    const trackSettings  = localStream.getVideoTracks()[0].getSettings();
-    const isFullScreen   = trackSettings.displaySurface === 'monitor';
-
     await dbSet(dbRef(db, `screenShare/${CCI}`), {
       active:     true,
       by:         CU.uid,
@@ -250,23 +177,17 @@ export function initScreenShare(db, dbRef, dbSet, dbGet, dbOnValue, dbRemove, db
       if (r?.pending) showControlRequest(r.name || 'Viewer');
     });
 
-    // Open transparent overlay on sharer's screen so viewer cursor
-    // appears at the exact same coordinates on the real shared content.
-    // Works for full-screen share; tab-only share falls back to HUD.
-    if (isFullScreen) {
-      overlayWin = window.open(
-        `ss-overlay.html?cci=${encodeURIComponent(CCI)}`,
-        'ss-overlay',
-        `width=${screen.width},height=${screen.height},top=0,left=0,` +
-        `menubar=no,toolbar=no,location=no,status=no`
-      );
-    }
+    // Always open transparent overlay — positions viewer cursor at exact
+    // screen coordinates on the sharer's real window (any share type).
+    overlayWin = window.open(
+      `ss-overlay.html?cci=${encodeURIComponent(CCI)}`,
+      'ss-overlay',
+      `width=${screen.width},height=${screen.height},top=0,left=0,` +
+      `menubar=no,toolbar=no,location=no,status=no`
+    );
 
     setShareUI(true);
-    toastFn(isFullScreen
-      ? '🖥️ Sharing — viewer cursor will appear live on your screen'
-      : '🖥️ Sharing — tip: share full screen for live cursor overlay'
-    );
+    toastFn('🖥️ Sharing started — viewer cursor will appear on your screen');
   };
 
   // ─────────────────────────────────
@@ -281,7 +202,6 @@ export function initScreenShare(db, dbRef, dbSet, dbGet, dbOnValue, dbRemove, db
     pc = null; localStream = null; controlGranted = false;
     unsubAns?.(); unsubVICE?.(); unsubControl?.(); unsubViewerCur?.();
     unsubControl = null; unsubViewerCur = null;
-    removeHUD();
     overlayWin?.close(); overlayWin = null;
     document.getElementById('ss-ctrl-bar')?.remove();
     if (CCI) await dbRemove(dbRef(db, `screenShare/${CCI}`));

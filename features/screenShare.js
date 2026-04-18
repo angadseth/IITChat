@@ -18,13 +18,14 @@ export function initScreenShare(db, dbRef, dbSet, dbGet, dbOnValue, dbRemove, db
   let unsubAns       = null;
   let unsubVICE      = null;
   let unsubControl   = null;
+  let unsubViewerCur = null;
   let controlGranted = false;
   let cursorThrottle = 0;
+  let overlayWin     = null;
 
   // ─────────────────────────────────────────────────────
-  //  Viewer Cursor HUD — small floating indicator shown
-  //  to the SHARER inside IIT Chat (corner of screen)
-  //  Shows viewer's cursor position on a tiny canvas
+  //  Viewer Cursor HUD — fallback when overlay can't open
+  //  (tab-only share or popup blocked)
   // ─────────────────────────────────────────────────────
   function ensureHUD() {
     if (document.getElementById('ss-hud')) return;
@@ -61,18 +62,14 @@ export function initScreenShare(db, dbRef, dbSet, dbGet, dbOnValue, dbRemove, db
     const ctx = cv.getContext('2d');
     const W = cv.width, H = cv.height;
     ctx.clearRect(0, 0, W, H);
-    // draw screen outline
     ctx.strokeStyle = 'rgba(108,99,255,0.3)';
     ctx.lineWidth = 1;
     ctx.strokeRect(1, 1, W-2, H-2);
-    // draw cursor dot
     const px = nx * W, py = ny * H;
-    // ripple
     ctx.beginPath();
     ctx.arc(px, py, 8, 0, Math.PI*2);
     ctx.fillStyle = 'rgba(67,233,123,0.15)';
     ctx.fill();
-    // dot
     ctx.beginPath();
     ctx.arc(px, py, 4, 0, Math.PI*2);
     ctx.fillStyle = '#43e97b';
@@ -151,7 +148,8 @@ export function initScreenShare(db, dbRef, dbSet, dbGet, dbOnValue, dbRemove, db
   //  ssInit — called when chat opens
   // ─────────────────────────────────
   window.ssInit = (cci) => {
-    unsubIncoming?.(); unsubControl?.();
+    unsubIncoming?.(); unsubControl?.(); unsubViewerCur?.();
+    unsubViewerCur = null;
     hideWatchBar(); removeHUD();
 
     unsubIncoming = dbOnValue(dbRef(db, `screenShare/${cci}`), snap => {
@@ -160,19 +158,20 @@ export function initScreenShare(db, dbRef, dbSet, dbGet, dbOnValue, dbRemove, db
       if (!data?.active) { hideWatchBar(); removeHUD(); return; }
 
       if (data.by === CU?.uid) {
-        // I am sharer — watch viewer cursor → show in HUD
-        dbOnValue(dbRef(db, `screenShare/${cci}/cursors/viewer`), s => {
-          const c = s.val();
-          if (c) updateHUD(c.x, c.y, c.name);
-          else   removeHUD();
-        });
-
-        // watch for control request
-        unsubControl?.();
-        unsubControl = dbOnValue(dbRef(db, `screenShare/${cci}/controlReq`), s => {
-          const r = s.val();
-          if (r?.pending) showControlRequest(r.name || 'Viewer');
-        });
+        // I am sharer — watch viewer cursor → HUD (fallback when overlay not open)
+        if (!unsubViewerCur) {
+          unsubViewerCur = dbOnValue(dbRef(db, `screenShare/${cci}/cursors/viewer`), s => {
+            const c = s.val();
+            if (c && !overlayWin) updateHUD(c.x, c.y, c.name);
+            else removeHUD();
+          });
+        }
+        if (!unsubControl) {
+          unsubControl = dbOnValue(dbRef(db, `screenShare/${cci}/controlReq`), s => {
+            const r = s.val();
+            if (r?.pending) showControlRequest(r.name || 'Viewer');
+          });
+        }
         return;
       }
 
@@ -203,7 +202,7 @@ export function initScreenShare(db, dbRef, dbSet, dbGet, dbOnValue, dbRemove, db
       if (e.candidate) dbPush(dbRef(db, `screenShare/${CCI}/ice_sharer`), e.candidate.toJSON());
     };
 
-    // push sharer cursor (for viewer to see as purple dot on video)
+    // push sharer cursor (viewer sees it as purple dot on video)
     const onMouse = e => {
       const now = Date.now();
       if (now - cursorThrottle < 40) return;
@@ -220,12 +219,20 @@ export function initScreenShare(db, dbRef, dbSet, dbGet, dbOnValue, dbRemove, db
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
 
+    // Detect share type — 'monitor' = full screen, 'window' or 'browser' = partial
+    const trackSettings  = localStream.getVideoTracks()[0].getSettings();
+    const isFullScreen   = trackSettings.displaySurface === 'monitor';
+
     await dbSet(dbRef(db, `screenShare/${CCI}`), {
       active:     true,
       by:         CU.uid,
       sharerName: CU.displayName || 'Partner',
       vpW:        window.innerWidth,
       vpH:        window.innerHeight,
+      winX:       window.screenX,
+      winY:       window.screenY,
+      chromeW:    window.outerWidth  - window.innerWidth,
+      chromeH:    window.outerHeight - window.innerHeight,
       offer:      { sdp: offer.sdp, type: offer.type }
     });
 
@@ -238,8 +245,28 @@ export function initScreenShare(db, dbRef, dbSet, dbGet, dbOnValue, dbRemove, db
       snap.forEach(c => pc?.addIceCandidate(new RTCIceCandidate(c.val())).catch(() => {}));
     });
 
+    unsubControl = dbOnValue(dbRef(db, `screenShare/${CCI}/controlReq`), s => {
+      const r = s.val();
+      if (r?.pending) showControlRequest(r.name || 'Viewer');
+    });
+
+    // Open transparent overlay on sharer's screen so viewer cursor
+    // appears at the exact same coordinates on the real shared content.
+    // Works for full-screen share; tab-only share falls back to HUD.
+    if (isFullScreen) {
+      overlayWin = window.open(
+        `ss-overlay.html?cci=${encodeURIComponent(CCI)}`,
+        'ss-overlay',
+        `width=${screen.width},height=${screen.height},top=0,left=0,` +
+        `menubar=no,toolbar=no,location=no,status=no`
+      );
+    }
+
     setShareUI(true);
-    toastFn('🖥️ Sharing started — check HUD for viewer pointer');
+    toastFn(isFullScreen
+      ? '🖥️ Sharing — viewer cursor will appear live on your screen'
+      : '🖥️ Sharing — tip: share full screen for live cursor overlay'
+    );
   };
 
   // ─────────────────────────────────
@@ -252,8 +279,10 @@ export function initScreenShare(db, dbRef, dbSet, dbGet, dbOnValue, dbRemove, db
     localStream?.getTracks().forEach(t => t.stop());
     pc?.close();
     pc = null; localStream = null; controlGranted = false;
-    unsubAns?.(); unsubVICE?.(); unsubControl?.();
+    unsubAns?.(); unsubVICE?.(); unsubControl?.(); unsubViewerCur?.();
+    unsubControl = null; unsubViewerCur = null;
     removeHUD();
+    overlayWin?.close(); overlayWin = null;
     document.getElementById('ss-ctrl-bar')?.remove();
     if (CCI) await dbRemove(dbRef(db, `screenShare/${CCI}`));
     setShareUI(false);

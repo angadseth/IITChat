@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>SS Overlay</title>
+<title></title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
   html, body {
@@ -13,15 +13,14 @@
   }
   #dot {
     position: fixed;
-    pointer-events: none;
     display: none;
-    flex-direction: column;
-    align-items: center;
-    gap: 4px;
+    align-items: flex-start;
+    gap: 3px;
+    pointer-events: none;
     transition: left .04s linear, top .04s linear;
   }
-  #dot svg { filter: drop-shadow(0 0 6px rgba(67,233,123,0.9)); }
-  #dot .lbl {
+  #dot svg { filter: drop-shadow(0 0 8px rgba(67,233,123,1)); flex-shrink:0; }
+  .lbl {
     background: #43e97b;
     color: #000;
     font-size: 11px;
@@ -29,37 +28,39 @@
     padding: 2px 8px;
     border-radius: 20px;
     white-space: nowrap;
-    box-shadow: 0 0 10px rgba(67,233,123,0.6);
+    box-shadow: 0 0 12px rgba(67,233,123,0.8);
+    margin-top: 16px;
   }
-  /* ripple on dot */
   #ripple {
     position: fixed;
-    width: 40px; height: 40px;
+    width: 36px; height: 36px;
     border-radius: 50%;
-    border: 2px solid rgba(67,233,123,0.6);
+    border: 2.5px solid rgba(67,233,123,0.8);
     pointer-events: none;
     display: none;
-    transform: translate(-50%, -50%);
+    transform: translate(-50%,-50%);
     animation: rp 1s ease-out infinite;
   }
   @keyframes rp {
     0%   { transform:translate(-50%,-50%) scale(.5); opacity:1; }
-    100% { transform:translate(-50%,-50%) scale(2);  opacity:0; }
+    100% { transform:translate(-50%,-50%) scale(2.2); opacity:0; }
   }
+  @keyframes clkR { to { transform:translate(-50%,-50%) scale(2.5); opacity:0; } }
 </style>
 </head>
 <body>
 <div id="ripple"></div>
 <div id="dot">
-  <svg width="26" height="26" viewBox="0 0 20 20">
-    <path d="M2 2l12 5-5 2-3 8z" fill="#43e97b" stroke="#fff" stroke-width="1.4"/>
+  <svg width="24" height="24" viewBox="0 0 20 20">
+    <path d="M2 2l12 5-5 2-3 8z" fill="#43e97b" stroke="#fff" stroke-width="1.5"/>
   </svg>
   <div class="lbl" id="lbl">Viewer</div>
 </div>
 
 <script type="module">
-import { initializeApp }  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, onValue, get }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
 const FC = {
   apiKey:            "AIzaSyBUkQ3ykM5ErEKeLSfClIuaU7Qtokwg0Ek",
@@ -72,62 +73,75 @@ const FC = {
 };
 
 const db  = getDatabase(initializeApp(FC));
-const p   = new URLSearchParams(location.search);
-const CCI = p.get('cci');
-const vpW = parseInt(p.get('w') || window.screen.width);
-const vpH = parseInt(p.get('h') || window.screen.height);
+const CCI = new URLSearchParams(location.search).get('cci');
+if (!CCI) { document.body.style.background='rgba(255,0,0,0.4)'; throw new Error('No CCI'); }
 
-function moveDot(nx, ny, name) {
-  const dot = document.getElementById('dot');
-  const rip = document.getElementById('ripple');
-  const px  = nx * window.innerWidth;
-  const py  = ny * window.innerHeight;
-  dot.style.display = 'flex';
-  dot.style.left    = (px - 4) + 'px';
-  dot.style.top     = (py - 4) + 'px';
-  rip.style.display = 'block';
-  rip.style.left    = px + 'px';
-  rip.style.top     = py + 'px';
-  document.getElementById('lbl').textContent = name || 'Viewer';
+// ── read session data once ──
+const snap = await get(ref(db, `screenShare/${CCI}`));
+const d    = snap.val();
+if (!d?.active) { window.close(); throw new Error('No session'); }
+
+// The sharer stored their browser window position + chrome dimensions.
+// We use this to map normalised coords (0-1 of sharer viewport)
+// → absolute screen pixel position on this overlay window.
+const winX   = d.winX   || 0;
+const winY   = d.winY   || 0;
+const chromeW = d.chromeW || 0;   // total horizontal chrome (left+right borders)
+const chromeH = d.chromeH || 0;   // total vertical chrome (title+tabs+toolbar)
+const vpW    = d.vpW    || screen.width;
+const vpH    = d.vpH    || screen.height;
+
+// Top-left corner of the actual content area in screen coordinates
+const contentX = winX + Math.round(chromeW / 2);
+const contentY = winY + chromeH;
+
+const dot = document.getElementById('dot');
+const rip = document.getElementById('ripple');
+const lbl = document.getElementById('lbl');
+
+// Convert normalised sharer-viewport coords → overlay fixed position
+function toFixed(nx, ny) {
+  return {
+    x: contentX + nx * vpW,
+    y: contentY + ny * vpH
+  };
 }
 
-function spawnClick(nx, ny) {
-  const el  = document.createElement('div');
-  const px  = nx * window.innerWidth;
-  const py  = ny * window.innerHeight;
-  el.style.cssText = `position:fixed;left:${px}px;top:${py}px;width:44px;height:44px;border-radius:50%;border:3px solid #43e97b;transform:translate(-50%,-50%) scale(.2);pointer-events:none;animation:clkRip .5s ease-out forwards;`;
+// ── viewer cursor ──
+onValue(ref(db, `screenShare/${CCI}/cursors/viewer`), snap => {
+  const c = snap.val();
+  if (!c) {
+    dot.style.display = 'none';
+    rip.style.display = 'none';
+    return;
+  }
+  const { x, y } = toFixed(c.x, c.y);
+  dot.style.display = 'flex';
+  dot.style.left    = x + 'px';
+  dot.style.top     = y + 'px';
+  rip.style.display = 'block';
+  rip.style.left    = x + 'px';
+  rip.style.top     = y + 'px';
+  lbl.textContent   = c.name || 'Viewer';
+});
+
+// ── click ripple ──
+onValue(ref(db, `screenShare/${CCI}/clicks`), snap => {
+  const c = snap.val();
+  if (!c) return;
+  const { x, y } = toFixed(c.x, c.y);
+  const el = document.createElement('div');
+  el.style.cssText = `position:fixed;left:${x}px;top:${y}px;width:44px;height:44px;`
+    + `border-radius:50%;border:3px solid #43e97b;`
+    + `transform:translate(-50%,-50%) scale(.2);pointer-events:none;`
+    + `animation:clkR .5s ease-out forwards;`;
   document.body.appendChild(el);
   setTimeout(() => el.remove(), 550);
-}
+});
 
-// inject click ripple keyframes once
-const ks = document.createElement('style');
-ks.textContent = '@keyframes clkRip{to{transform:translate(-50%,-50%) scale(2.5);opacity:0;}}';
-document.head.appendChild(ks);
-
-if (!CCI) { document.body.innerHTML = '<p style="color:red;padding:20px">No session</p>'; }
-else {
-  // cursor from Firebase
-  onValue(ref(db, `screenShare/${CCI}/cursors/viewer`), snap => {
-    const c = snap.val();
-    if (!c) {
-      document.getElementById('dot').style.display    = 'none';
-      document.getElementById('ripple').style.display = 'none';
-      return;
-    }
-    moveDot(c.x, c.y, c.name);
-  });
-
-  // click ripple from Firebase (sent by screenShare.js via postMessage relay)
-  onValue(ref(db, `screenShare/${CCI}/clicks`), snap => {
-    const c = snap.val();
-    if (c) spawnClick(c.x, c.y);
-  });
-}
-
-// also accept postMessage from parent (screenShare.js relay)
-window.addEventListener('message', e => {
-  if (e.data?.type === 'click') spawnClick(e.data.x, e.data.y);
+// ── close when share ends ──
+onValue(ref(db, `screenShare/${CCI}`), snap => {
+  if (!snap.val()?.active) window.close();
 });
 </script>
 </body>

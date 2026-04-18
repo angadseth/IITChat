@@ -7,107 +7,108 @@
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
-  body {
-    background:#000; color:#fff;
-    font-family:'Sora',system-ui,sans-serif;
-    height:100vh; overflow:hidden; display:flex; flex-direction:column;
-  }
+  body { background:#000; color:#fff; font-family:'Sora',system-ui,sans-serif; height:100vh; overflow:hidden; display:flex; flex-direction:column; }
 
-  /* top bar */
   #top-bar {
     position:fixed; top:0; left:0; right:0; height:44px;
-    background:rgba(10,10,20,0.9); backdrop-filter:blur(14px);
+    background:rgba(10,10,22,0.92); backdrop-filter:blur(14px);
     border-bottom:1px solid rgba(108,99,255,0.2);
-    display:none; align-items:center; padding:0 14px; gap:10px; z-index:100;
+    display:none; align-items:center; padding:0 14px; gap:10px; z-index:200;
   }
   .tb-dot { width:8px;height:8px;border-radius:50%;background:#ff4f6b;animation:blink 1s ease infinite;flex-shrink:0; }
   @keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
   .tb-label { font-size:13px;font-weight:600;flex:1; }
   .tb-label b { color:#a78bfa; }
+  .tb-badge {
+    font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;
+    background:rgba(108,99,255,.2);border:1px solid rgba(108,99,255,.3);color:#a78bfa;
+  }
   .tb-btn {
-    background:rgba(108,99,255,0.2);border:1px solid rgba(108,99,255,0.3);
+    background:rgba(108,99,255,.18);border:1px solid rgba(108,99,255,.3);
     color:#fff;padding:5px 12px;border-radius:8px;cursor:pointer;
     font-size:11px;font-weight:600;transition:.2s;white-space:nowrap;
   }
-  .tb-btn:hover { background:rgba(108,99,255,0.4); }
-  .tb-btn.active { background:#ff4f6b33;border-color:#ff4f6b66;color:#ff4f6b; }
+  .tb-btn:hover { background:rgba(108,99,255,.35); }
+  .tb-btn.on { background:#43e97b22;border-color:#43e97b55;color:#43e97b; }
 
-  /* video wrapper */
-  #video-wrap {
+  /* video area */
+  #vwrap {
     flex:1; position:relative; display:flex;
     align-items:center; justify-content:center;
-    background:#000; margin-top:44px;
+    background:#000; margin-top:44px; overflow:hidden;
   }
-  #screen-video {
-    max-width:100%; max-height:100%; object-fit:contain;
-    display:none; width:100%; height:100%;
+  #sv {
+    width:100%; height:100%; object-fit:contain;
+    display:none;
   }
 
-  /* cursor overlay — sits on top of video */
-  #cursor-overlay {
-    position:absolute; top:0;left:0;right:0;bottom:0;
-    pointer-events:none; overflow:hidden;
+  /* cursor overlay — exact same size/position as #vwrap */
+  #cov {
+    position:absolute; inset:0;
+    pointer-events:none;
   }
-  .cursor-dot {
-    position:absolute; transform:translate(0,0);
-    pointer-events:none; transition:left .04s linear, top .04s linear;
-    display:flex; align-items:flex-start; gap:3px;
+  /* when pointer mode on, let mouse events hit the overlay */
+  #vwrap.ptr #cov { pointer-events:auto; cursor:none; }
+
+  .cdot {
+    position:absolute; display:flex; align-items:flex-start; gap:2px;
+    pointer-events:none;
+    transition:left .04s linear,top .04s linear;
   }
-  .cursor-dot svg { flex-shrink:0; }
-  .cursor-dot .clabel {
-    font-size:10px; font-weight:700; padding:2px 6px;
-    border-radius:5px; white-space:nowrap; margin-top:14px;
+  .cdot svg  { flex-shrink:0; }
+  .cdot span {
+    font-size:10px;font-weight:700;padding:2px 6px;border-radius:5px;
+    white-space:nowrap;margin-top:14px;box-shadow:0 2px 8px rgba(0,0,0,.5);
   }
-  /* pointer tool cursor when enabled */
-  #video-wrap.pointer-mode { cursor:crosshair; }
-  #video-wrap.pointer-mode #screen-video { pointer-events:auto; }
 
   /* waiting / error */
-  #waiting, #error-msg {
-    position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
-    display:flex; flex-direction:column; align-items:center; gap:16px; text-align:center;
+  #waiting,#errbox {
+    position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+    display:flex;flex-direction:column;align-items:center;gap:16px;text-align:center;
   }
-  #error-msg { display:none; }
-  .wait-icon  { font-size:52px;animation:pulse 2s ease infinite; }
+  #errbox { display:none; }
+  .wico { font-size:52px;animation:pulse 2s ease infinite; }
   @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}
-  .wait-title { font-size:20px;font-weight:700; }
-  .wait-sub   { font-size:13px;color:#9090b0; }
-  .spinner { width:38px;height:38px;border-radius:50%;border:3px solid rgba(108,99,255,.2);border-top-color:#6c63ff;animation:spin .9s linear infinite; }
-  @keyframes spin{to{transform:rotate(360deg)}}
-  .err-icon  { font-size:46px; }
-  .err-title { font-size:18px;font-weight:700;color:#ff4f6b; }
-  .err-sub   { font-size:12px;color:#9090b0; }
+  .wtitle { font-size:20px;font-weight:700; }
+  .wsub   { font-size:13px;color:#9090b0; }
+  .spin { width:38px;height:38px;border-radius:50%;border:3px solid rgba(108,99,255,.2);border-top-color:#6c63ff;animation:sp .9s linear infinite; }
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .etitle { font-size:18px;font-weight:700;color:#ff4f6b; }
+  .esub   { font-size:12px;color:#9090b0; }
 </style>
 </head>
 <body>
 
 <div id="top-bar">
   <div class="tb-dot"></div>
-  <div class="tb-label">Live — <b id="sharer-name">Partner</b></div>
-  <button class="tb-btn" id="pointer-btn" onclick="togglePointer()">🖱 Pointer Off</button>
+  <div class="tb-label">Live — <b id="sname">Partner</b></div>
+  <span class="tb-badge" id="ptr-badge">🖱 Pointer OFF</span>
+  <button class="tb-btn" id="ptr-btn" onclick="togglePtr()">Enable Pointer</button>
   <button class="tb-btn" onclick="toggleFS()">⛶ Fullscreen</button>
 </div>
 
-<div id="video-wrap">
-  <video id="screen-video" autoplay playsinline muted></video>
-  <div id="cursor-overlay"></div>
+<div id="vwrap">
+  <video id="sv" autoplay playsinline muted></video>
+
+  <!-- cursor overlay — both pointers drawn here -->
+  <div id="cov"></div>
 
   <div id="waiting">
-    <div class="wait-icon">🖥️</div>
-    <div class="wait-title">Connecting…</div>
-    <div class="wait-sub">Waiting for screen stream</div>
-    <div class="spinner"></div>
+    <div class="wico">🖥️</div>
+    <div class="wtitle">Connecting…</div>
+    <div class="wsub">Waiting for screen stream</div>
+    <div class="spin"></div>
   </div>
-  <div id="error-msg">
-    <div class="err-icon">😕</div>
-    <div class="err-title">Share Ended</div>
-    <div class="err-sub" id="err-sub"></div>
+  <div id="errbox">
+    <div class="wico">😕</div>
+    <div class="etitle">Share Ended</div>
+    <div class="esub" id="etxt">The screen share has stopped.</div>
   </div>
 </div>
 
 <script type="module">
 import { initializeApp }  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getDatabase, ref, onValue, set, push, get, remove }
+import { getDatabase, ref, onValue, set, push, get }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 import { getAuth, onAuthStateChanged }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
@@ -121,138 +122,136 @@ const FC = {
   messagingSenderId: "701410820532",
   appId:             "1:701410820532:web:1c975bcfd5812c10f132e1"
 };
-const ICE_CFG = { iceServers:[
-  {urls:'stun:stun.l.google.com:19302'},
-  {urls:'stun:stun1.l.google.com:19302'},
-]};
+const ICE = { iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}]};
 
-const fbApp = initializeApp(FC);
-const db    = getDatabase(fbApp);
-const auth  = getAuth(fbApp);
+const fb   = initializeApp(FC);
+const db   = getDatabase(fb);
+const auth = getAuth(fb);
 
-const params   = new URLSearchParams(location.search);
-const CCI      = params.get('cci');
-const myName   = decodeURIComponent(params.get('name') || 'Viewer');
+const p      = new URLSearchParams(location.search);
+const CCI    = p.get('cci');
+const myName = decodeURIComponent(p.get('name') || 'Viewer');
 
 let pointerOn  = false;
-let cursorThrottle = 0;
-let screenW = 1920, screenH = 1080; // sharer screen size
+let vpW = 1280, vpH = 720; // sharer's viewport dimensions
+let curTh = 0;
 
 // ── utils ──
+const el = id => document.getElementById(id);
+
 function showError(msg) {
-  document.getElementById('waiting').style.display  = 'none';
-  document.getElementById('top-bar').style.display  = 'none';
-  document.getElementById('screen-video').style.display = 'none';
-  const e = document.getElementById('error-msg');
-  e.style.display = 'flex';
-  document.getElementById('err-sub').textContent = msg || 'Share has stopped.';
+  el('waiting').style.display = 'none';
+  el('top-bar').style.display = 'none';
+  el('sv').style.display      = 'none';
+  el('errbox').style.display  = 'flex';
+  el('etxt').textContent      = msg;
 }
 
-function showStream() {
-  document.getElementById('waiting').style.display      = 'none';
-  document.getElementById('top-bar').style.display      = 'flex';
-  document.getElementById('screen-video').style.display = 'block';
-}
-
-// ── cursor overlay helpers ──
-function getOrCreateCursor(id, color, label) {
-  let dot = document.getElementById(id);
-  if (!dot) {
-    dot = document.createElement('div');
-    dot.id = id; dot.className = 'cursor-dot';
-    dot.innerHTML = `
-      <svg width="18" height="18" viewBox="0 0 20 20">
+// ── cursor helpers ──
+// Get or create a named cursor dot on the overlay
+function getOrMakeDot(id, color, label) {
+  let d = el(id);
+  if (!d) {
+    d = document.createElement('div');
+    d.id = id; d.className = 'cdot';
+    d.innerHTML = `
+      <svg width="20" height="20" viewBox="0 0 20 20">
         <path d="M2 2l12 5-5 2-3 8z" fill="${color}" stroke="#fff" stroke-width="1.2"/>
       </svg>
-      <span class="clabel" style="background:${color}">${label}</span>`;
-    document.getElementById('cursor-overlay').appendChild(dot);
+      <span style="background:${color};color:#fff">${label}</span>`;
+    el('cov').appendChild(d);
   }
-  return dot;
+  return d;
 }
 
-// map normalized sharer coords → pixel pos on the displayed video area
-function sharerToPixel(nx, ny) {
-  const video = document.getElementById('screen-video');
+// Convert normalised sharer coords (0-1 of sharer viewport)
+// → pixel position on the overlay div (accounts for letterbox)
+function sharerNormToOverlay(nx, ny) {
+  const video = el('sv');
   const vr    = video.getBoundingClientRect();
-  const wrap  = document.getElementById('video-wrap').getBoundingClientRect();
+  const wr    = el('vwrap').getBoundingClientRect();
 
-  // account for letterbox (object-fit:contain)
-  const vidAR   = (video.videoWidth  || screenW) / (video.videoHeight || screenH);
-  const boxAR   = vr.width / vr.height;
-  let drawW, drawH, offX = 0, offY = 0;
-  if (vidAR > boxAR) { drawW = vr.width;  drawH = vr.width  / vidAR; offY = (vr.height - drawH) / 2; }
-  else               { drawH = vr.height; drawW = vr.height * vidAR; offX = (vr.width  - drawW) / 2; }
+  // letterbox offsets inside the video element
+  const vidAR = (video.videoWidth  || vpW) / (video.videoHeight || vpH);
+  const boxAR = vr.width / vr.height;
+  let dw, dh, ox = 0, oy = 0;
+  if (vidAR > boxAR) { dw = vr.width;  dh = vr.width  / vidAR; oy = (vr.height - dh) / 2; }
+  else               { dh = vr.height; dw = vr.height * vidAR; ox = (vr.width  - dw) / 2; }
 
   return {
-    x: (vr.left - wrap.left) + offX + nx * drawW,
-    y: (vr.top  - wrap.top)  + offY + ny * drawH
+    x: (vr.left - wr.left) + ox + nx * dw,
+    y: (vr.top  - wr.top)  + oy + ny * dh
   };
 }
 
-// map pixel on video element → normalized sharer coords
-function pixelToSharer(px, py) {
-  const video = document.getElementById('screen-video');
+// Convert mouse position on the overlay
+// → normalised coords in sharer's viewport (0-1)
+function overlayPxToSharerNorm(px, py) {
+  const video = el('sv');
   const vr    = video.getBoundingClientRect();
-  const vidAR = (video.videoWidth  || screenW) / (video.videoHeight || screenH);
+  const wr    = el('vwrap').getBoundingClientRect();
+
+  const vidAR = (video.videoWidth  || vpW) / (video.videoHeight || vpH);
   const boxAR = vr.width / vr.height;
-  let drawW, drawH, offX = 0, offY = 0;
-  if (vidAR > boxAR) { drawW = vr.width;  drawH = vr.width  / vidAR; offY = (vr.height - drawH) / 2; }
-  else               { drawH = vr.height; drawW = vr.height * vidAR; offX = (vr.width  - drawW) / 2; }
+  let dw, dh, ox = 0, oy = 0;
+  if (vidAR > boxAR) { dw = vr.width;  dh = vr.width  / vidAR; oy = (vr.height - dh) / 2; }
+  else               { dh = vr.height; dw = vr.height * vidAR; ox = (vr.width  - dw) / 2; }
+
+  // px/py are relative to vwrap; subtract video's offset within vwrap
+  const relX = px - (vr.left - wr.left) - ox;
+  const relY = py - (vr.top  - wr.top)  - oy;
 
   return {
-    x: Math.max(0, Math.min(1, (px - offX) / drawW)),
-    y: Math.max(0, Math.min(1, (py - offY) / drawH))
+    x: Math.max(0, Math.min(1, relX / dw)),
+    y: Math.max(0, Math.min(1, relY / dh))
   };
 }
 
 // ── pointer toggle ──
-window.togglePointer = () => {
+window.togglePtr = () => {
   pointerOn = !pointerOn;
-  const btn  = document.getElementById('pointer-btn');
-  const wrap = document.getElementById('video-wrap');
-  if (pointerOn) {
-    btn.textContent = '🖱 Pointer On';
-    btn.classList.add('active');
-    wrap.classList.add('pointer-mode');
-  } else {
-    btn.textContent = '🖱 Pointer Off';
-    btn.classList.remove('active');
-    wrap.classList.remove('pointer-mode');
-    // hide own cursor dot
-    document.getElementById('cursor-viewer')?.remove();
-    if (CCI) set(ref(db, `screenShare/${CCI}/cursors/viewer`), null);
+  el('vwrap').classList.toggle('ptr', pointerOn);
+  el('ptr-btn').textContent = pointerOn ? 'Disable Pointer' : 'Enable Pointer';
+  el('ptr-btn').classList.toggle('on', pointerOn);
+  el('ptr-badge').textContent = pointerOn ? '🖱 Pointer ON' : '🖱 Pointer OFF';
+  if (!pointerOn) {
+    el('dot-viewer')?.remove();
+    if (CCI) set(ref(db, `screenShare/${CCI}/cursors/viewer`), null).catch(() => {});
   }
 };
 
 window.toggleFS = () => {
-  if (!document.fullscreenElement) document.getElementById('video-wrap').requestFullscreen();
+  if (!document.fullscreenElement) el('vwrap').requestFullscreen();
   else document.exitFullscreen();
 };
 
 // ── main ──
 if (!CCI) { showError('Invalid session.'); }
 else {
-  onAuthStateChanged(auth, user => {
-    if (!user) { showError('Sign in to IIT Chat first.'); return; }
-    startViewer(user);
+  onAuthStateChanged(auth, u => {
+    if (!u) { showError('Please sign in to IIT Chat first.'); return; }
+    connect(u);
   });
 }
 
-async function startViewer(CU) {
+async function connect(CU) {
   const snap = await get(ref(db, `screenShare/${CCI}`));
   const data = snap.val();
-  if (!data?.active || !data?.offer) { showError('No active share found.'); return; }
+  if (!data?.active || !data?.offer) { showError('No active screen share found.'); return; }
 
-  document.getElementById('sharer-name').textContent = data.sharerName || 'Partner';
-  screenW = data.screenW || 1920;
-  screenH = data.screenH || 1080;
+  el('sname').textContent = data.sharerName || 'Partner';
+  vpW = data.vpW || 1280;
+  vpH = data.vpH || 720;
 
-  const pc = new RTCPeerConnection(ICE_CFG);
+  const pc = new RTCPeerConnection(ICE);
 
+  // ── receive stream ──
   pc.ontrack = e => {
-    const v = document.getElementById('screen-video');
+    const v = el('sv');
     v.srcObject = e.streams[0];
-    showStream();
+    v.style.display = 'block';
+    el('waiting').style.display = 'none';
+    el('top-bar').style.display = 'flex';
   };
 
   pc.onicecandidate = e => {
@@ -260,57 +259,59 @@ async function startViewer(CU) {
   };
 
   await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
-  const answer = await pc.createAnswer();
-  await pc.setLocalDescription(answer);
-  await set(ref(db, `screenShare/${CCI}/answer`), { sdp: answer.sdp, type: answer.type });
+  const ans = await pc.createAnswer();
+  await pc.setLocalDescription(ans);
+  await set(ref(db, `screenShare/${CCI}/answer`), { sdp: ans.sdp, type: ans.type });
 
   // sharer ICE
-  onValue(ref(db, `screenShare/${CCI}/ice_sharer`), snap => {
-    snap.forEach(c => pc.addIceCandidate(new RTCIceCandidate(c.val())).catch(() => {}));
+  onValue(ref(db, `screenShare/${CCI}/ice_sharer`), s => {
+    s.forEach(c => pc.addIceCandidate(new RTCIceCandidate(c.val())).catch(() => {}));
   });
 
-  // sharer cursor → show purple dot
-  onValue(ref(db, `screenShare/${CCI}/cursors/sharer`), snap => {
-    const c = snap.val();
-    if (!c) { document.getElementById('cursor-sharer')?.remove(); return; }
-    const dot = getOrCreateCursor('cursor-sharer', '#6c63ff', data.sharerName || 'Sharer');
-    const pos = sharerToPixel(c.x, c.y);
+  // ── sharer cursor → purple dot on video ──
+  onValue(ref(db, `screenShare/${CCI}/cursors/sharer`), s => {
+    const c = s.val();
+    if (!c) { el('dot-sharer')?.remove(); return; }
+    const dot = getOrMakeDot('dot-sharer', '#a78bfa', data.sharerName || 'Sharer');
+    const pos = sharerNormToOverlay(c.x, c.y);
     dot.style.left = pos.x + 'px';
     dot.style.top  = pos.y + 'px';
   });
 
-  // track share end
-  onValue(ref(db, `screenShare/${CCI}`), snap => {
-    if (!snap.val()?.active) {
-      set(ref(db, `screenShare/${CCI}/cursors/viewer`), null).catch(() => {});
-      showError('Screen share has ended.');
-    }
-  });
-
-  // mouse move on video → push cursor if pointer on
-  document.getElementById('video-wrap').addEventListener('mousemove', e => {
+  // ── viewer cursor → green dot on video (my own) ──
+  // (also pushed to Firebase so sharer sees it on their screen)
+  el('cov').addEventListener('mousemove', e => {
     if (!pointerOn) return;
     const now = Date.now();
-    if (now - cursorThrottle < 40) return;
-    cursorThrottle = now;
+    if (now - curTh < 40) return;
+    curTh = now;
 
-    const wrap  = document.getElementById('video-wrap');
-    const wr    = wrap.getBoundingClientRect();
-    const px    = e.clientX - wr.left;
-    const py    = e.clientY - wr.top;
-    const norm  = pixelToSharer(px, py);
+    const wr  = el('vwrap').getBoundingClientRect();
+    const px  = e.clientX - wr.left;
+    const py  = e.clientY - wr.top;
+    const n   = overlayPxToSharerNorm(px, py);
 
-    // show own cursor
-    const dot = getOrCreateCursor('cursor-viewer', '#43e97b', myName);
+    // show my dot locally
+    const dot = getOrMakeDot('dot-viewer', '#43e97b', myName);
     dot.style.left = px + 'px';
     dot.style.top  = py + 'px';
 
+    // push to Firebase → sharer sees it on their actual window
     set(ref(db, `screenShare/${CCI}/cursors/viewer`), {
-      x: norm.x, y: norm.y, name: myName
+      x: n.x, y: n.y, name: myName
     });
   });
 
-  // cleanup on close
+  el('cov').addEventListener('mouseleave', () => {
+    el('dot-viewer')?.remove();
+    if (CCI) set(ref(db, `screenShare/${CCI}/cursors/viewer`), null).catch(() => {});
+  });
+
+  // ── share ended ──
+  onValue(ref(db, `screenShare/${CCI}`), s => {
+    if (!s.val()?.active) showError('The screen share has ended.');
+  });
+
   window.addEventListener('beforeunload', () => {
     set(ref(db, `screenShare/${CCI}/cursors/viewer`), null).catch(() => {});
   });

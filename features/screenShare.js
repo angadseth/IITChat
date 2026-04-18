@@ -1,6 +1,9 @@
 // ══════════════════════════════════════════════════════
 //  features/screenShare.js  —  WebRTC screen sharing
-//  + real-time cursor sync for both sharer & viewer
+//  Coordinate system:
+//    Viewer  → sends   (x, y) normalised 0-1 of video content area
+//    Sharer  → maps to (x * innerW, y * innerH) on its own page
+//    Viewer  → shows both cursors on top of the <video> element
 // ══════════════════════════════════════════════════════
 
 const ICE_CFG = {
@@ -13,15 +16,78 @@ const ICE_CFG = {
 
 export function initScreenShare(db, dbRef, dbSet, dbGet, dbOnValue, dbRemove, dbPush, dbUpdate, getState, toastFn) {
 
-  let pc          = null;
-  let localStream = null;
-  let unsubIncoming = null;
-  let unsubAns    = null;
-  let unsubVICE   = null;
-  let cursorUnsub = null;
+  let pc             = null;
+  let localStream    = null;
+  let unsubIncoming  = null;
+  let unsubAns       = null;
+  let unsubVICE      = null;
+  let unsubViewerCur = null;
   let cursorThrottle = 0;
 
-  // ── Show/hide sharer indicator ──
+  // ─────────────────────────────────────────
+  //  Sharer-side overlay (shows viewer cursor
+  //  on top of the actual page content)
+  // ─────────────────────────────────────────
+  function ensureOverlay() {
+    if (document.getElementById('ss-ov')) return;
+    const ov = document.createElement('div');
+    ov.id = 'ss-ov';
+    ov.style.cssText =
+      'position:fixed;top:0;left:0;width:100%;height:100%;' +
+      'pointer-events:none;z-index:2147483647;overflow:hidden;';
+    document.body.appendChild(ov);
+  }
+
+  function setCursorDot(id, color, label, nx, ny) {
+    ensureOverlay();
+    let dot = document.getElementById(id);
+    if (!dot) {
+      dot = document.createElement('div');
+      dot.id = id;
+      dot.style.cssText =
+        'position:fixed;pointer-events:none;display:flex;' +
+        'align-items:flex-start;gap:3px;' +
+        'transition:left .04s linear,top .04s linear;';
+      dot.innerHTML = `
+        <svg width="20" height="20" viewBox="0 0 20 20" style="flex-shrink:0">
+          <path d="M2 2l12 5-5 2-3 8z" fill="${color}" stroke="#fff" stroke-width="1.2"/>
+        </svg>
+        <span style="background:${color};color:#fff;font-size:10px;font-weight:700;
+          padding:2px 6px;border-radius:5px;white-space:nowrap;margin-top:14px;
+          box-shadow:0 2px 8px rgba(0,0,0,.5);font-family:system-ui,sans-serif;"></span>`;
+      document.getElementById('ss-ov').appendChild(dot);
+    }
+    dot.querySelector('span').textContent = label;
+    // nx,ny are 0-1 relative to the shared PAGE viewport
+    dot.style.left = (nx * window.innerWidth)  + 'px';
+    dot.style.top  = (ny * window.innerHeight) + 'px';
+  }
+
+  // ─────────────────────────────────────────
+  //  Watch-bar (shown to viewer when share starts)
+  // ─────────────────────────────────────────
+  function showWatchBar(sharerName) {
+    let bar = document.getElementById('ss-watch-bar');
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.id = 'ss-watch-bar';
+      bar.className = 'ss-watch-bar';
+      document.getElementById('acd')?.prepend(bar);
+    }
+    bar.innerHTML = `
+      <span class="ss-watch-dot"></span>
+      <span><b>${sharerName}</b> is sharing their screen</span>
+      <button class="ss-watch-btn" onclick="ssWatch()">Watch</button>
+      <button class="ss-watch-close" onclick="this.closest('#ss-watch-bar').remove()">✕</button>`;
+  }
+
+  function hideWatchBar() {
+    document.getElementById('ss-watch-bar')?.remove();
+  }
+
+  // ─────────────────────────────────────────
+  //  Share button UI
+  // ─────────────────────────────────────────
   function setShareUI(active) {
     const btn = document.getElementById('ss-btn');
     if (!btn) return;
@@ -36,87 +102,43 @@ export function initScreenShare(db, dbRef, dbSet, dbGet, dbOnValue, dbRemove, db
     }
   }
 
-  // ── Show incoming share bar ──
-  function showWatchBar(sharerName) {
-    let bar = document.getElementById('ss-watch-bar');
-    if (!bar) {
-      bar = document.createElement('div');
-      bar.id = 'ss-watch-bar';
-      bar.className = 'ss-watch-bar';
-      document.getElementById('acd')?.prepend(bar);
-    }
-    bar.innerHTML = `
-      <span class="ss-watch-dot"></span>
-      <span><b>${sharerName}</b> is sharing their screen</span>
-      <button class="ss-watch-btn" onclick="ssWatch()">Watch</button>
-      <button class="ss-watch-close" onclick="document.getElementById('ss-watch-bar')?.remove()">✕</button>`;
-  }
-
-  function hideWatchBar() {
-    document.getElementById('ss-watch-bar')?.remove();
-  }
-
-  // ── Sharer cursor overlay (shows viewer's cursor on sharer screen) ──
-  function ensureSharerOverlay() {
-    if (document.getElementById('ss-cursor-overlay')) return;
-    const ov = document.createElement('div');
-    ov.id = 'ss-cursor-overlay';
-    ov.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9999;';
-    document.body.appendChild(ov);
-  }
-
-  function showViewerCursorOnSharer(x, y, name) {
-    ensureSharerOverlay();
-    let dot = document.getElementById('ss-viewer-dot');
-    if (!dot) {
-      dot = document.createElement('div');
-      dot.id = 'ss-viewer-dot';
-      dot.innerHTML = `
-        <svg width="22" height="22" viewBox="0 0 20 20">
-          <path d="M2 2l12 5-5 2-3 8z" fill="#43e97b" stroke="#fff" stroke-width="1.2"/>
-        </svg>
-        <span style="background:#43e97b;color:#fff;font-size:10px;font-weight:700;
-          padding:2px 6px;border-radius:5px;margin-left:2px;white-space:nowrap;
-          font-family:system-ui,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,0.4)"></span>`;
-      dot.style.cssText = 'position:fixed;pointer-events:none;z-index:2147483647;display:flex;align-items:flex-start;transition:left 0.04s linear,top 0.04s linear;';
-      document.getElementById('ss-cursor-overlay').appendChild(dot);
-    }
-    dot.querySelector('span').textContent = name || 'Viewer';
-    // Convert normalised screen coords → viewport coords
-    // window.screenX/Y = browser window's position on the physical screen
-    const titleBarH = window.outerHeight - window.innerHeight;
-    const vpX = (x * window.screen.width)  - window.screenX;
-    const vpY = (y * window.screen.height) - window.screenY - titleBarH;
-    dot.style.left = vpX + 'px';
-    dot.style.top  = vpY + 'px';
-  }
-
-  // ── Called when chat opens ──
+  // ─────────────────────────────────────────
+  //  ssInit — called when any chat opens
+  // ─────────────────────────────────────────
   window.ssInit = (cci) => {
     unsubIncoming?.();
-    cursorUnsub?.();
+    unsubViewerCur?.();
     hideWatchBar();
-    document.getElementById('ss-cursor-overlay')?.remove();
+    document.getElementById('ss-ov')?.remove();
 
     unsubIncoming = dbOnValue(dbRef(db, `screenShare/${cci}`), snap => {
       const data = snap.val();
       const { CU } = getState();
-      if (!data || !data.active) { hideWatchBar(); return; }
+
+      if (!data || !data.active) {
+        hideWatchBar();
+        document.getElementById('ss-viewer-dot')?.remove();
+        return;
+      }
+
       if (data.by === CU?.uid) {
-        // I'm the sharer — listen for viewer cursor
-        cursorUnsub?.();
-        cursorUnsub = dbOnValue(dbRef(db, `screenShare/${cci}/cursors/viewer`), s => {
+        // I'm the sharer — watch for viewer's cursor and show on MY screen
+        unsubViewerCur?.();
+        unsubViewerCur = dbOnValue(dbRef(db, `screenShare/${cci}/cursors/viewer`), s => {
           const c = s.val();
-          if (c) showViewerCursorOnSharer(c.x, c.y, c.name);
+          if (c) setCursorDot('ss-viewer-dot', '#43e97b', c.name || 'Viewer', c.x, c.y);
           else   document.getElementById('ss-viewer-dot')?.remove();
         });
         return;
       }
+
       showWatchBar(data.sharerName || 'Partner');
     });
   };
 
-  // ── Start sharing ──
+  // ─────────────────────────────────────────
+  //  Start sharing
+  // ─────────────────────────────────────────
   window.startSS = async () => {
     const { CU, CCI } = getState();
     if (!CCI) { toastFn('Open a chat first'); return; }
@@ -124,54 +146,44 @@ export function initScreenShare(db, dbRef, dbSet, dbGet, dbOnValue, dbRemove, db
 
     try {
       localStream = await navigator.mediaDevices.getDisplayMedia({
-        video: { cursor: 'never', frameRate: { ideal: 30, max: 60 }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+        video: { cursor: 'always', frameRate: { ideal: 30, max: 60 } },
         audio: false
       });
     } catch { return; }
 
     pc = new RTCPeerConnection(ICE_CFG);
-
-    // prioritize low latency
-    const sender = pc.addTrack(localStream.getVideoTracks()[0], localStream);
-    try {
-      const params = sender.getParameters();
-      if (!params.encodings) params.encodings = [{}];
-      params.encodings[0].networkPriority = 'high';
-      params.encodings[0].priority        = 'high';
-      await sender.setParameters(params);
-    } catch {}
-
+    pc.addTrack(localStream.getVideoTracks()[0], localStream);
     localStream.getVideoTracks()[0].onended = () => window.stopSS();
 
     pc.onicecandidate = e => {
       if (e.candidate) dbPush(dbRef(db, `screenShare/${CCI}/ice_sharer`), e.candidate.toJSON());
     };
 
-    // track own mouse — push normalized to Firebase
-    const onMouseMove = (e) => {
+    // Push my own cursor — normalised to my innerWidth/innerHeight
+    const onMouse = e => {
       const now = Date.now();
-      if (now - cursorThrottle < 50) return; // 20fps cursor
+      if (now - cursorThrottle < 40) return;
       cursorThrottle = now;
       const { CU } = getState();
       dbSet(dbRef(db, `screenShare/${CCI}/cursors/sharer`), {
-        x: e.screenX / (window.screen.width  || 1920),
-        y: e.screenY / (window.screen.height || 1080),
-        name: CU?.displayName || 'You'
+        x:    e.clientX / window.innerWidth,
+        y:    e.clientY / window.innerHeight,
+        name: CU?.displayName || 'Sharer'
       });
     };
-    document.addEventListener('mousemove', onMouseMove);
-    localStream.getVideoTracks()[0]._onMouseMove = onMouseMove; // save ref to remove later
+    document.addEventListener('mousemove', onMouse);
+    localStream.getVideoTracks()[0]._onMouse = onMouse;
 
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
 
     await dbSet(dbRef(db, `screenShare/${CCI}`), {
-      active:      true,
-      by:          CU.uid,
-      sharerName:  CU.displayName || 'Partner',
-      screenW:     window.screen.width,
-      screenH:     window.screen.height,
-      offer:       { sdp: offer.sdp, type: offer.type }
+      active:     true,
+      by:         CU.uid,
+      sharerName: CU.displayName || 'Partner',
+      vpW:        window.innerWidth,
+      vpH:        window.innerHeight,
+      offer:      { sdp: offer.sdp, type: offer.type }
     });
 
     unsubAns = dbOnValue(dbRef(db, `screenShare/${CCI}/answer`), async snap => {
@@ -187,22 +199,26 @@ export function initScreenShare(db, dbRef, dbSet, dbGet, dbOnValue, dbRemove, db
     toastFn('🖥️ Screen sharing started');
   };
 
-  // ── Stop sharing ──
+  // ─────────────────────────────────────────
+  //  Stop sharing
+  // ─────────────────────────────────────────
   window.stopSS = async () => {
     const { CCI } = getState();
     const track = localStream?.getVideoTracks()[0];
-    if (track?._onMouseMove) document.removeEventListener('mousemove', track._onMouseMove);
+    if (track?._onMouse) document.removeEventListener('mousemove', track._onMouse);
     localStream?.getTracks().forEach(t => t.stop());
     pc?.close();
     pc = null; localStream = null;
-    unsubAns?.(); unsubVICE?.();
-    document.getElementById('ss-cursor-overlay')?.remove();
+    unsubAns?.(); unsubVICE?.(); unsubViewerCur?.();
+    document.getElementById('ss-ov')?.remove();
     if (CCI) await dbRemove(dbRef(db, `screenShare/${CCI}`));
     setShareUI(false);
     toastFn('🖥️ Screen share stopped');
   };
 
-  // ── Open viewer window ──
+  // ─────────────────────────────────────────
+  //  Open viewer window
+  // ─────────────────────────────────────────
   window.ssWatch = () => {
     const { CCI, CU } = getState();
     if (!CCI) return;

@@ -1,6 +1,5 @@
 // ══════════════════════════════════════════════════════
 //  features/screenShare.js  —  WebRTC screen sharing
-//  + audio  + cursor sync  + visual remote control
 // ══════════════════════════════════════════════════════
 
 const ICE_CFG = {
@@ -18,56 +17,74 @@ export function initScreenShare(db, dbRef, dbSet, dbGet, dbOnValue, dbRemove, db
   let unsubIncoming  = null;
   let unsubAns       = null;
   let unsubVICE      = null;
-  let unsubViewerCur = null;
   let unsubControl   = null;
   let controlGranted = false;
   let cursorThrottle = 0;
-  let overlayWin     = null;
 
-  // ─────────────────────────────────
-  //  Overlay dot on sharer's screen
-  // ─────────────────────────────────
-  function ensureOverlay() {
-    if (document.getElementById('ss-ov')) return;
-    const ov = document.createElement('div');
-    ov.id = 'ss-ov';
-    ov.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:2147483647;overflow:hidden;';
-    document.body.appendChild(ov);
+  // ─────────────────────────────────────────────────────
+  //  Viewer Cursor HUD — small floating indicator shown
+  //  to the SHARER inside IIT Chat (corner of screen)
+  //  Shows viewer's cursor position on a tiny canvas
+  // ─────────────────────────────────────────────────────
+  function ensureHUD() {
+    if (document.getElementById('ss-hud')) return;
+    const hud = document.createElement('div');
+    hud.id = 'ss-hud';
+    hud.style.cssText = `
+      position:fixed; bottom:90px; right:16px; z-index:9999;
+      background:rgba(13,13,31,0.92); border:1px solid rgba(108,99,255,0.35);
+      border-radius:12px; padding:8px 10px; pointer-events:none;
+      backdrop-filter:blur(10px); min-width:130px;
+      box-shadow:0 4px 20px rgba(0,0,0,0.5);
+      font-family:system-ui,sans-serif;
+    `;
+    hud.innerHTML = `
+      <div style="font-size:10px;font-weight:700;color:#a78bfa;margin-bottom:6px;display:flex;align-items:center;gap:5px">
+        <span style="width:6px;height:6px;border-radius:50%;background:#43e97b;display:inline-block;animation:hudBlink 1s ease infinite"></span>
+        Viewer pointer
+      </div>
+      <canvas id="ss-hud-cv" width="110" height="62"
+        style="border-radius:6px;background:#1a1a2e;display:block;"></canvas>
+      <div id="ss-hud-name" style="font-size:9px;color:#9090b0;margin-top:4px;text-align:center"></div>
+    `;
+    const style = document.createElement('style');
+    style.textContent = '@keyframes hudBlink{0%,100%{opacity:1}50%{opacity:.2}}';
+    document.head.appendChild(style);
+    document.body.appendChild(hud);
   }
 
-  function setCursorDot(id, color, label, nx, ny) {
-    ensureOverlay();
-    let dot = document.getElementById(id);
-    if (!dot) {
-      dot = document.createElement('div');
-      dot.id = id;
-      dot.style.cssText = 'position:fixed;pointer-events:none;display:flex;align-items:flex-start;gap:3px;transition:left .04s linear,top .04s linear;';
-      dot.innerHTML = `
-        <svg width="20" height="20" viewBox="0 0 20 20" style="flex-shrink:0">
-          <path d="M2 2l12 5-5 2-3 8z" fill="${color}" stroke="#fff" stroke-width="1.2"/>
-        </svg>
-        <span style="background:${color};color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:5px;white-space:nowrap;margin-top:14px;box-shadow:0 2px 8px rgba(0,0,0,.5);font-family:system-ui,sans-serif;"></span>`;
-      document.getElementById('ss-ov').appendChild(dot);
-    }
-    dot.querySelector('span').textContent = label;
-    dot.style.left = (nx * window.innerWidth)  + 'px';
-    dot.style.top  = (ny * window.innerHeight) + 'px';
+  function updateHUD(nx, ny, name) {
+    ensureHUD();
+    const cv  = document.getElementById('ss-hud-cv');
+    const nm  = document.getElementById('ss-hud-name');
+    if (!cv) return;
+    const ctx = cv.getContext('2d');
+    const W = cv.width, H = cv.height;
+    ctx.clearRect(0, 0, W, H);
+    // draw screen outline
+    ctx.strokeStyle = 'rgba(108,99,255,0.3)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(1, 1, W-2, H-2);
+    // draw cursor dot
+    const px = nx * W, py = ny * H;
+    // ripple
+    ctx.beginPath();
+    ctx.arc(px, py, 8, 0, Math.PI*2);
+    ctx.fillStyle = 'rgba(67,233,123,0.15)';
+    ctx.fill();
+    // dot
+    ctx.beginPath();
+    ctx.arc(px, py, 4, 0, Math.PI*2);
+    ctx.fillStyle = '#43e97b';
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    if (nm) nm.textContent = name || 'Viewer';
   }
 
-  function spawnClickRipple(nx, ny, color) {
-    ensureOverlay();
-    const el = document.createElement('div');
-    const px = nx * window.innerWidth;
-    const py = ny * window.innerHeight;
-    el.style.cssText = `position:fixed;left:${px}px;top:${py}px;width:36px;height:36px;border-radius:50%;border:2.5px solid ${color};transform:translate(-50%,-50%) scale(.3);opacity:1;pointer-events:none;z-index:2147483647;animation:ssRipple .55s ease-out forwards;`;
-    document.getElementById('ss-ov').appendChild(el);
-    if (!document.getElementById('ss-rip-style')) {
-      const s = document.createElement('style');
-      s.id = 'ss-rip-style';
-      s.textContent = '@keyframes ssRipple{to{transform:translate(-50%,-50%) scale(2.2);opacity:0;}}';
-      document.head.appendChild(s);
-    }
-    setTimeout(() => el.remove(), 600);
+  function removeHUD() {
+    document.getElementById('ss-hud')?.remove();
   }
 
   // ─────────────────────────────────
@@ -78,7 +95,7 @@ export function initScreenShare(db, dbRef, dbSet, dbGet, dbOnValue, dbRemove, db
     if (!bar) {
       bar = document.createElement('div');
       bar.id = 'ss-ctrl-bar';
-      bar.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#1a1a2e;border:1px solid rgba(108,99,255,.4);border-radius:14px;padding:12px 20px;display:flex;align-items:center;gap:12px;z-index:2147483647;box-shadow:0 8px 32px rgba(0,0,0,.5);font-family:system-ui,sans-serif;';
+      bar.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#1a1a2e;border:1px solid rgba(108,99,255,.4);border-radius:14px;padding:12px 20px;display:flex;align-items:center;gap:12px;z-index:9999;box-shadow:0 8px 32px rgba(0,0,0,.5);font-family:system-ui,sans-serif;';
       document.body.appendChild(bar);
     }
     bar.innerHTML = `
@@ -131,33 +148,30 @@ export function initScreenShare(db, dbRef, dbSet, dbGet, dbOnValue, dbRemove, db
   }
 
   // ─────────────────────────────────
-  //  ssInit
+  //  ssInit — called when chat opens
   // ─────────────────────────────────
   window.ssInit = (cci) => {
-    unsubIncoming?.(); unsubViewerCur?.(); unsubControl?.();
-    hideWatchBar();
-    document.getElementById('ss-ov')?.remove();
+    unsubIncoming?.(); unsubControl?.();
+    hideWatchBar(); removeHUD();
 
     unsubIncoming = dbOnValue(dbRef(db, `screenShare/${cci}`), snap => {
       const data = snap.val();
       const { CU } = getState();
-      if (!data?.active) { hideWatchBar(); document.getElementById('ss-viewer-dot')?.remove(); return; }
+      if (!data?.active) { hideWatchBar(); removeHUD(); return; }
 
       if (data.by === CU?.uid) {
-        // I am sharer — cursor shown ONLY in ss-overlay.html, not here
+        // I am sharer — watch viewer cursor → show in HUD
+        dbOnValue(dbRef(db, `screenShare/${cci}/cursors/viewer`), s => {
+          const c = s.val();
+          if (c) updateHUD(c.x, c.y, c.name);
+          else   removeHUD();
+        });
 
         // watch for control request
         unsubControl?.();
         unsubControl = dbOnValue(dbRef(db, `screenShare/${cci}/controlReq`), s => {
           const r = s.val();
           if (r?.pending) showControlRequest(r.name || 'Viewer');
-        });
-
-        // watch for clicks from viewer — show ripple in overlay window via postMessage
-        dbOnValue(dbRef(db, `screenShare/${cci}/clicks`), s => {
-          const c = s.val();
-          if (!c || !controlGranted) return;
-          overlayWin?.postMessage({ type:'click', x:c.x, y:c.y }, '*');
         });
         return;
       }
@@ -177,7 +191,7 @@ export function initScreenShare(db, dbRef, dbSet, dbGet, dbOnValue, dbRemove, db
     try {
       localStream = await navigator.mediaDevices.getDisplayMedia({
         video: { cursor: 'always', frameRate: { ideal: 30, max: 60 } },
-        audio: true   // ← system audio
+        audio: true
       });
     } catch { return; }
 
@@ -189,7 +203,7 @@ export function initScreenShare(db, dbRef, dbSet, dbGet, dbOnValue, dbRemove, db
       if (e.candidate) dbPush(dbRef(db, `screenShare/${CCI}/ice_sharer`), e.candidate.toJSON());
     };
 
-    // push my cursor
+    // push sharer cursor (for viewer to see as purple dot on video)
     const onMouse = e => {
       const now = Date.now();
       if (now - cursorThrottle < 40) return;
@@ -224,16 +238,8 @@ export function initScreenShare(db, dbRef, dbSet, dbGet, dbOnValue, dbRemove, db
       snap.forEach(c => pc?.addIceCandidate(new RTCIceCandidate(c.val())).catch(() => {}));
     });
 
-    // open overlay window
-    overlayWin = window.open(
-      `ss-overlay.html?cci=${encodeURIComponent(CCI)}&w=${window.innerWidth}&h=${window.innerHeight}`,
-      'ss-overlay',
-      `width=${window.screen.width},height=${window.screen.height},top=0,left=0,menubar=no,toolbar=no,location=no,status=no`
-    );
-    localStream.getVideoTracks()[0]._overlayWin = overlayWin;
-
     setShareUI(true);
-    toastFn('🖥️ Sharing started with audio');
+    toastFn('🖥️ Sharing started — check HUD for viewer pointer');
   };
 
   // ─────────────────────────────────
@@ -243,12 +249,11 @@ export function initScreenShare(db, dbRef, dbSet, dbGet, dbOnValue, dbRemove, db
     const { CCI } = getState();
     const track = localStream?.getVideoTracks()[0];
     if (track?._onMouse) document.removeEventListener('mousemove', track._onMouse);
-    track?._overlayWin?.close();
     localStream?.getTracks().forEach(t => t.stop());
     pc?.close();
-    pc = null; localStream = null; overlayWin = null; controlGranted = false;
-    unsubAns?.(); unsubVICE?.(); unsubViewerCur?.(); unsubControl?.();
-    document.getElementById('ss-ov')?.remove();
+    pc = null; localStream = null; controlGranted = false;
+    unsubAns?.(); unsubVICE?.(); unsubControl?.();
+    removeHUD();
     document.getElementById('ss-ctrl-bar')?.remove();
     if (CCI) await dbRemove(dbRef(db, `screenShare/${CCI}`));
     setShareUI(false);

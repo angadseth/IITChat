@@ -551,11 +551,13 @@ function mkBody(msg, isMe, isNew) {
       return `<div class="vo-bub tap"><i class="fa fa-eye"></i> Tap to view</div>`;
     }
     const cap = msg.caption ? `<div class="msg-cap">${escHtml(msg.caption)}</div>` : '';
-    return `<img class="mimg" src="${msg.url}" loading="lazy">${cap}`;
+    const dl  = `<button class="msg-dl" onclick="dlFile('${escJs(msg.url)}','${escJs(msg.name||'photo.jpg')}')" title="Download"><i class="fa fa-download"></i></button>`;
+    return `<div class="mimg-wrap">${dl}<img class="mimg" src="${msg.url}" loading="lazy"></div>${cap}`;
   }
   if (msg.type === 'video') {
     const cap = msg.caption ? `<div class="msg-cap">${escHtml(msg.caption)}</div>` : '';
-    return `<video class="mvid" controls preload="metadata"><source src="${msg.url}"></video>${cap}`;
+    const dl  = `<button class="msg-dl msg-dl-vid" onclick="dlFile('${escJs(msg.url)}','${escJs(msg.name||'video.mp4')}')" title="Download"><i class="fa fa-download"></i></button>`;
+    return `<div class="mimg-wrap">${dl}<video class="mvid" controls preload="metadata"><source src="${msg.url}"></video></div>${cap}`;
   }
   if (msg.type === 'audio') {
     const d = msg.duration || 0;
@@ -576,22 +578,22 @@ function mkBody(msg, isMe, isNew) {
     const name = escHtml(msg.name || 'Document');
     const size = fmtSize(msg.size);
     const cap  = msg.caption ? `<div class="msg-cap">${escHtml(msg.caption)}</div>` : '';
-    return `<a class="mdoc" href="${msg.url}" target="_blank" download="${name}">
-      <i class="fa fa-file-pdf" style="color:#f57f17"></i>
+    return `<div class="mdoc">
+      <i class="fa fa-file-pdf" style="color:#f57f17;font-size:22px"></i>
       <div class="mdoc-info"><div class="mdoc-name">${name}</div>${size ? `<div class="mdoc-size">${size}</div>` : ''}</div>
-      <i class="fa fa-download" style="opacity:.5;flex-shrink:0"></i>
-    </a>${cap}`;
+      <button class="msg-dl-btn" onclick="dlFile('${escJs(msg.url)}','${name}')" title="Download"><i class="fa fa-download"></i></button>
+    </div>${cap}`;
   }
   if (msg.type === 'file') {
     const name = escHtml(msg.name || 'File');
     const size = fmtSize(msg.size);
     const { ico, col } = fileIcon(msg.mime, msg.name);
     const cap  = msg.caption ? `<div class="msg-cap">${escHtml(msg.caption)}</div>` : '';
-    return `<a class="mdoc" href="${msg.url}" target="_blank" download="${name}">
+    return `<div class="mdoc">
       <i class="fa ${ico}" style="color:${col};font-size:22px"></i>
       <div class="mdoc-info"><div class="mdoc-name">${name}</div>${size ? `<div class="mdoc-size">${size}</div>` : ''}</div>
-      <i class="fa fa-download" style="opacity:.5;flex-shrink:0"></i>
-    </a>${cap}`;
+      <button class="msg-dl-btn" onclick="dlFile('${escJs(msg.url)}','${name}')" title="Download"><i class="fa fa-download"></i></button>
+    </div>${cap}`;
   }
   return '';
 }
@@ -641,6 +643,7 @@ function mkMsg(msg, isMe, con) {
   row.querySelector('.mimg')?.addEventListener('click', e => { e.stopPropagation(); openImg(msg.url); });
   row.querySelector('.mvid')?.addEventListener('click', e => e.stopPropagation());
   row.querySelector('.mdoc')?.addEventListener('click', e => e.stopPropagation());
+  row.querySelectorAll('.msg-dl,.msg-dl-btn').forEach(b => b.addEventListener('click', e => e.stopPropagation()));
   row.querySelector('.vo-bub.tap')?.addEventListener('click', e => { e.stopPropagation(); viewOnce(msg.id, msg.url); });
 
   return row;
@@ -918,6 +921,21 @@ const EMOJIS = {
 window.toggleEP = () => {
   el('amnl').classList.add('hidden');
   el('epnl').classList.toggle('hidden');
+};
+
+// ── Download any file (blob trick for cross-origin) ──
+window.dlFile = async (url, name) => {
+  try {
+    const res  = await fetch(url);
+    const blob = await res.blob();
+    const bUrl = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = bUrl; a.download = name || 'file'; a.click();
+    setTimeout(() => URL.revokeObjectURL(bUrl), 2000);
+  } catch {
+    // fallback: open in new tab
+    window.open(url, '_blank');
+  }
 };
 
 window.toggleAM = () => {
@@ -1658,10 +1676,8 @@ window.doSendFile = async () => {
       await sendData(data);
     } else {
       // Video / file via Firebase Storage with real progress
-      const folder = msgType === 'video' ? 'videos' : 'files';
-      // Sanitize filename — remove characters Firebase Storage doesn't like
       const safeName = file.name.replace(/[#\[\]*?]/g, '_');
-      const storageRef = sRef(storage, `chat-files/${CCI}/${folder}/${Date.now()}_${safeName}`);
+      const storageRef = sRef(storage, `uploads/${CU.uid}/${Date.now()}_${safeName}`);
       const task = uploadBytesResumable(storageRef, file);
       await new Promise((resolve, reject) => {
         task.on('state_changed',
@@ -1671,21 +1687,19 @@ window.doSendFile = async () => {
             progTxt.textContent = `Uploading… ${pct}%`;
           },
           err => {
-            // Surface a clear message for the most common errors
             if (err.code === 'storage/unauthorized')
-              reject(new Error('Storage permission denied — check Firebase Storage rules'));
+              reject(new Error('Firebase Storage rules block this — set: allow read, write: if request.auth != null'));
             else if (err.code === 'storage/quota-exceeded')
-              reject(new Error('Firebase Storage quota exceeded'));
+              reject(new Error('Storage quota exceeded'));
             else
               reject(err);
           },
-          async () => {
-            progBar.style.width = '95%';
-            const url = await getDownloadURL(task.snapshot.ref);
-            const data = { type: msgType, url, name: file.name, size: file.size, mime: file.type };
-            if (caption) data.caption = caption;
-            await sendData(data);
-            resolve();
+          () => {  // ← NOT async — errors were silently swallowed before
+            getDownloadURL(task.snapshot.ref).then(url => {
+              const data = { type: msgType, url, name: file.name, size: file.size, mime: file.type };
+              if (caption) data.caption = caption;
+              return sendData(data);
+            }).then(resolve).catch(reject);
           }
         );
       });

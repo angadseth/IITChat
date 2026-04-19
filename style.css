@@ -972,15 +972,35 @@ body {
 .mdoc {
   display: flex; align-items: center; gap: 10px;
   padding: 11px 14px; border-radius: 12px;
-  text-decoration: none; color: var(--text);
-  min-width: 180px; max-width: 250px;
-  background: rgba(255,255,255,0.07); transition: var(--tr);
+  color: var(--text);
+  min-width: 200px; max-width: 260px;
+  background: rgba(255,255,255,0.07);
 }
-.mdoc:hover { background: rgba(255,255,255,0.13); }
-.mdoc .fa-file-alt { font-size: 22px; flex-shrink: 0; }
 .mdoc-info { flex: 1; min-width: 0; }
 .mdoc-name { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mdoc-size { font-size: 10px; opacity: .55; margin-top: 2px; }
+
+/* ── Download buttons on media ── */
+.mimg-wrap { position: relative; display: inline-block; }
+.msg-dl {
+  position: absolute; bottom: 7px; right: 7px;
+  width: 28px; height: 28px; border-radius: 50%;
+  background: rgba(0,0,0,.55); border: none; color: #fff;
+  font-size: 11px; cursor: pointer; display: flex; align-items: center;
+  justify-content: center; opacity: 0; transition: opacity .18s, transform .15s;
+  backdrop-filter: blur(4px); z-index: 4;
+}
+.msg-dl-vid { bottom: 50px; right: 10px; opacity: 1; }
+.mimg-wrap:hover .msg-dl { opacity: 1; }
+.msg-dl:hover { transform: scale(1.15); background: rgba(108,99,255,.8); }
+.msg-dl-btn {
+  width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
+  background: rgba(108,99,255,.18); border: 1px solid rgba(108,99,255,.3);
+  color: var(--accent); font-size: 12px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: var(--tr);
+}
+.msg-dl-btn:hover { background: var(--accent); color: #fff; transform: scale(1.1); }
 
 /* ── VIEW ONCE ── */
 .vo-bub {

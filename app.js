@@ -550,10 +550,12 @@ function mkBody(msg, isMe, isNew) {
       if (viewed) return `<div class="vo-bub opened"><i class="fa fa-eye-slash"></i> Photo opened</div>`;
       return `<div class="vo-bub tap"><i class="fa fa-eye"></i> Tap to view</div>`;
     }
-    return `<img class="mimg" src="${msg.url}" loading="lazy">`;
+    const cap = msg.caption ? `<div class="msg-cap">${escHtml(msg.caption)}</div>` : '';
+    return `<img class="mimg" src="${msg.url}" loading="lazy">${cap}`;
   }
   if (msg.type === 'video') {
-    return `<video class="mvid" controls preload="metadata"><source src="${msg.url}"></video>`;
+    const cap = msg.caption ? `<div class="msg-cap">${escHtml(msg.caption)}</div>` : '';
+    return `<video class="mvid" controls preload="metadata"><source src="${msg.url}"></video>${cap}`;
   }
   if (msg.type === 'audio') {
     const d = msg.duration || 0;
@@ -573,21 +575,23 @@ function mkBody(msg, isMe, isNew) {
   if (msg.type === 'document') {
     const name = escHtml(msg.name || 'Document');
     const size = fmtSize(msg.size);
+    const cap  = msg.caption ? `<div class="msg-cap">${escHtml(msg.caption)}</div>` : '';
     return `<a class="mdoc" href="${msg.url}" target="_blank" download="${name}">
       <i class="fa fa-file-pdf" style="color:#f57f17"></i>
       <div class="mdoc-info"><div class="mdoc-name">${name}</div>${size ? `<div class="mdoc-size">${size}</div>` : ''}</div>
       <i class="fa fa-download" style="opacity:.5;flex-shrink:0"></i>
-    </a>`;
+    </a>${cap}`;
   }
   if (msg.type === 'file') {
     const name = escHtml(msg.name || 'File');
     const size = fmtSize(msg.size);
     const { ico, col } = fileIcon(msg.mime, msg.name);
+    const cap  = msg.caption ? `<div class="msg-cap">${escHtml(msg.caption)}</div>` : '';
     return `<a class="mdoc" href="${msg.url}" target="_blank" download="${name}">
       <i class="fa ${ico}" style="color:${col};font-size:22px"></i>
       <div class="mdoc-info"><div class="mdoc-name">${name}</div>${size ? `<div class="mdoc-size">${size}</div>` : ''}</div>
       <i class="fa fa-download" style="opacity:.5;flex-shrink:0"></i>
-    </a>`;
+    </a>${cap}`;
   }
   return '';
 }
@@ -1612,7 +1616,7 @@ function openSendPreview(file, msgType) {
   el('sf-prog-bar').style.width = '0%';
   el('sf-prog-txt').textContent = 'Uploading… 0%';
   el('sf-send').disabled = false;
-  el('sf-send').textContent = 'Send';
+  el('sf-send').innerHTML = '<i class="fa fa-paper-plane"></i> Send';
 
   ov.classList.add('show');
   setTimeout(() => caption.focus(), 100);
@@ -1633,7 +1637,7 @@ window.doSendFile = async () => {
   const progTxt  = el('sf-prog-txt');
 
   sendBtn.disabled = true;
-  sendBtn.textContent = 'Uploading…';
+  sendBtn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Uploading…';
   progWrap.classList.remove('hidden');
 
   try {
@@ -1655,7 +1659,9 @@ window.doSendFile = async () => {
     } else {
       // Video / file via Firebase Storage with real progress
       const folder = msgType === 'video' ? 'videos' : 'files';
-      const storageRef = sRef(storage, `${folder}/${CCI}/${Date.now()}_${file.name}`);
+      // Sanitize filename — remove characters Firebase Storage doesn't like
+      const safeName = file.name.replace(/[#\[\]*?]/g, '_');
+      const storageRef = sRef(storage, `chat-files/${CCI}/${folder}/${Date.now()}_${safeName}`);
       const task = uploadBytesResumable(storageRef, file);
       await new Promise((resolve, reject) => {
         task.on('state_changed',
@@ -1664,7 +1670,15 @@ window.doSendFile = async () => {
             progBar.style.width = pct + '%';
             progTxt.textContent = `Uploading… ${pct}%`;
           },
-          reject,
+          err => {
+            // Surface a clear message for the most common errors
+            if (err.code === 'storage/unauthorized')
+              reject(new Error('Storage permission denied — check Firebase Storage rules'));
+            else if (err.code === 'storage/quota-exceeded')
+              reject(new Error('Firebase Storage quota exceeded'));
+            else
+              reject(err);
+          },
           async () => {
             progBar.style.width = '95%';
             const url = await getDownloadURL(task.snapshot.ref);
@@ -1678,12 +1692,14 @@ window.doSendFile = async () => {
     }
     progBar.style.width = '100%';
     progTxt.textContent = '✅ Sent!';
-    setTimeout(() => { el('sfm').classList.remove('show'); pendingFile = null; }, 400);
+    setTimeout(() => { el('sfm').classList.remove('show'); pendingFile = null; }, 500);
   } catch (err) {
-    console.error(err);
-    progTxt.textContent = '❌ Failed: ' + err.message;
+    console.error('Send file error:', err);
+    progTxt.textContent = '❌ ' + (err.message || 'Upload failed');
+    progBar.style.background = '#ff4f6b';
     sendBtn.disabled = false;
-    sendBtn.textContent = 'Retry';
+    sendBtn.innerHTML = '<i class="fa fa-paper-plane"></i> Retry';
+    toast('❌ ' + (err.message || 'Upload failed'));
   }
 };
 

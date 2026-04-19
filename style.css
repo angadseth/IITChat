@@ -887,14 +887,17 @@ body {
 .sf-caption:focus { border-color: var(--accent); }
 .sf-caption::placeholder { color: var(--text3); }
 .sf-send-btn {
-  width: 44px; height: 44px; border-radius: 50%;
+  padding: 10px 20px; border-radius: 22px; flex-shrink: 0;
   background: var(--accent); border: none; color: #fff;
-  font-size: 16px; cursor: pointer; display: flex; align-items: center;
-  justify-content: center; flex-shrink: 0; transition: var(--tr);
-  box-shadow: 0 3px 12px rgba(108,99,255,.4);
+  font-size: 13px; font-weight: 700; cursor: pointer;
+  display: flex; align-items: center; gap: 7px;
+  transition: var(--tr); white-space: nowrap;
+  box-shadow: 0 4px 14px rgba(108,99,255,.4);
+  letter-spacing: .3px;
 }
-.sf-send-btn:hover:not(:disabled) { filter: brightness(1.12); transform: scale(1.07); }
-.sf-send-btn:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+.sf-send-btn:hover:not(:disabled) { filter: brightness(1.1); transform: translateY(-1px); box-shadow: 0 6px 18px rgba(108,99,255,.5); }
+.sf-send-btn:active:not(:disabled) { transform: translateY(0) scale(.97); }
+.sf-send-btn:disabled { opacity: .4; cursor: not-allowed; transform: none; box-shadow: none; }
 .sf-prog-wrap {
   display: flex; align-items: center; gap: 10px;
 }
@@ -947,6 +950,13 @@ body {
 }
 .amo:hover { background: var(--bg3); }
 .amo i { width: 18px; text-align: center; }
+
+/* ── MESSAGE CAPTION ── */
+.msg-cap {
+  font-size: 13px; color: var(--text);
+  padding: 5px 2px 1px;
+  line-height: 1.45; word-break: break-word;
+}
 
 /* ── MEDIA MESSAGES ── */
 .mimg {

@@ -517,7 +517,10 @@ body {
   font-size: 10px; color: var(--text3); margin-top: 1px;
 }
 .mr.me .mm { flex-direction: row-reverse; }
-.mck { color: var(--accent3); }
+.mck      { font-size: 12px; transition: color .3s; }
+.mck i    { transition: color .3s; }
+.mck.sent  i { color: #e05050; }   /* delivered, not seen yet — red */
+.mck.seen  i { color: #43e97b; }   /* seen — green */
 
 /* Reactions */
 .rcts { display: flex; gap: 3px; flex-wrap: wrap; margin-top: 2px; }

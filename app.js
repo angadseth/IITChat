@@ -80,6 +80,10 @@ let ctListeners   = [];     // contact-level listeners to clean up on reload
 // ── file send preview state ──
 let pendingFile = null;   // { file, msgType, folder }
 
+// ── message seen state ──
+let otherSeenUpTo = 0;   // timestamp: up to which ts the other user has seen
+let seenUnsubFn   = null; // firebase listener cleanup
+
 // ── music state ──
 let ytPlayer       = null;   // YouTube IFrame player
 let ytReady        = false;  // IFrame API loaded?
@@ -473,6 +477,17 @@ async function openChat(uid, u) {
     setTimeout(() => remove(snap.ref), 3200);
   });
 
+  // ── message seen tracking ──
+  otherSeenUpTo = 0;
+  if (seenUnsubFn) { seenUnsubFn(); seenUnsubFn = null; }
+  // tell the other side I have this chat open
+  set(ref(db, `chats/${CCI}/seenUpTo/${CU.uid}`), Date.now()).catch(() => {});
+  // listen to whether they've seen my messages
+  seenUnsubFn = onValue(ref(db, `chats/${CCI}/seenUpTo/${uid}`), snap => {
+    otherSeenUpTo = snap.val() || 0;
+    updateAllTicks();
+  });
+
   startMusicSync(CCI);
   drawChatOpen();
   window.ssInit?.(CCI);
@@ -506,6 +521,24 @@ function loadMsgs() {
     });
     area.scrollTop = area.scrollHeight;
     checkScrollBtn();
+    // mark all visible messages as seen (I'm looking at this chat)
+    if (!isGroup) {
+      set(ref(db, `chats/${CCI}/seenUpTo/${CU.uid}`), Date.now()).catch(() => {});
+      updateAllTicks();
+    }
+  });
+}
+
+// update tick colors for all my rendered messages based on otherSeenUpTo
+function updateAllTicks() {
+  if (isGroup) return;
+  el('ma')?.querySelectorAll('.mr.me[data-ts]').forEach(row => {
+    const tick = row.querySelector('.mck');
+    if (!tick) return;
+    const ts = +row.dataset.ts;
+    const seen = otherSeenUpTo >= ts;
+    tick.className = seen ? 'mck seen' : 'mck sent';
+    tick.title = seen ? 'Seen' : 'Delivered';
   });
 }
 
@@ -602,6 +635,7 @@ function mkMsg(msg, isMe, con) {
   const row = document.createElement('div');
   row.className = `mr ${isMe ? 'me' : 'them'}${con ? ' con' : ''}`;
   row.dataset.mid = msg.id;
+  row.dataset.ts  = msg.ts;
 
   const isNew   = Date.now() - msg.ts < 5000;
   const emojiOnly = msg.type === 'text' && emojiOnlyCount(msg.text) > 0;
@@ -636,7 +670,7 @@ function mkMsg(msg, isMe, con) {
       <div class="mm">
         <span>${fmtTime(msg.ts)}</span>
         ${expH < 24 ? `<span style="opacity:.45;font-size:9px">🕐${expH}h</span>` : ''}
-        ${isMe ? '<span class="mck"><i class="fa fa-check-double"></i></span>' : ''}
+        ${isMe ? `<span class="mck ${!isGroup && otherSeenUpTo >= msg.ts ? 'seen' : 'sent'}" title="${!isGroup && otherSeenUpTo >= msg.ts ? 'Seen' : 'Delivered'}"><i class="fa fa-check-double"></i></span>` : ''}
       </div>
     </div>`;
 

@@ -121,10 +121,19 @@ function makeDraggable(panel, handle, delegateSel) {
   document.addEventListener('touchend', onUp);
 }
 
-// ── Avatar HTML helper — photo if available, else emoji ──
+// ── Avatar HTML helper — photo > gradient-emoji fallback ──
 function avH(av, photo) {
   if (photo) return `<img src="${photo}" class="av-img" alt="" loading="lazy">`;
-  return av || '👤';
+  const e = av || '👤';
+  // pick a vibrant gradient based on the emoji's codepoint
+  const GRADS = [
+    '#6c63ff,#43e97b','#ff4f6b,#ff9a00','#00cfff,#4776ff',
+    '#f093fb,#f5576c','#43e97b,#38f9d7','#fa709a,#fee140',
+    '#4facfe,#00f2fe','#a18cd1,#fbc2eb','#667eea,#764ba2',
+    '#f6d365,#fda085'
+  ];
+  const idx = (e.codePointAt(0) || 0) % GRADS.length;
+  return `<span class="av-em" style="background:linear-gradient(135deg,${GRADS[idx]})">${e}</span>`;
 }
 
 function saveUnread() { localStorage.setItem('iitchat-unread', JSON.stringify(unreadCounts)); }
@@ -562,7 +571,17 @@ function mkBody(msg, isMe, isNew) {
     const name = escHtml(msg.name || 'Document');
     const size = fmtSize(msg.size);
     return `<a class="mdoc" href="${msg.url}" target="_blank" download="${name}">
-      <i class="fa fa-file-alt"></i>
+      <i class="fa fa-file-pdf" style="color:#f57f17"></i>
+      <div class="mdoc-info"><div class="mdoc-name">${name}</div>${size ? `<div class="mdoc-size">${size}</div>` : ''}</div>
+      <i class="fa fa-download" style="opacity:.5;flex-shrink:0"></i>
+    </a>`;
+  }
+  if (msg.type === 'file') {
+    const name = escHtml(msg.name || 'File');
+    const size = fmtSize(msg.size);
+    const { ico, col } = fileIcon(msg.mime, msg.name);
+    return `<a class="mdoc" href="${msg.url}" target="_blank" download="${name}">
+      <i class="fa ${ico}" style="color:${col};font-size:22px"></i>
       <div class="mdoc-info"><div class="mdoc-name">${name}</div>${size ? `<div class="mdoc-size">${size}</div>` : ''}</div>
       <i class="fa fa-download" style="opacity:.5;flex-shrink:0"></i>
     </a>`;
@@ -903,16 +922,28 @@ window.pickFile = type => {
   el('amnl').classList.add('hidden');
   if (type === 'camera') { openCAM(); return; }
   if (!CCI) { toast('Open a chat first'); return; }
-  if (type === 'media') el('fi-media').click();
-  else                  el('fi-vo').click();
+  if (type === 'media')    el('fi-media').click();
+  else if (type === 'viewonce') el('fi-vo').click();
+  else if (type === 'video')    el('fi-video').click();
+  else if (type === 'doc')      el('fi-doc').click();
+  else if (type === 'any')      el('fi-any').click();
 };
 
 async function handleFilePick(e, type) {
   const file = e.target.files[0];
   e.target.value = '';
   if (!file) return;
-  if (!file.type.startsWith('image/')) { toast('❌ Sirf images supported hain'); return; }
-  await uploadImageFile(file, type === 'viewonce');
+  if (type === 'media' || type === 'viewonce') {
+    if (!file.type.startsWith('image/')) { toast('❌ Sirf images supported hain'); return; }
+    await uploadImageFile(file, type === 'viewonce');
+  } else if (type === 'video') {
+    if (!file.type.startsWith('video/')) { toast('❌ Video file select karo'); return; }
+    if (file.size > 60 * 1024 * 1024) { toast('❌ Max video size: 60 MB'); return; }
+    await uploadStorageFile(file, 'videos', 'video');
+  } else if (type === 'doc' || type === 'any') {
+    if (file.size > 30 * 1024 * 1024) { toast('❌ Max file size: 30 MB'); return; }
+    await uploadStorageFile(file, 'files', 'file');
+  }
 }
 
 function toBase64(file) {
@@ -1378,7 +1409,8 @@ function setupNotifForContact(uid, uName, uAvatar) {
                : msg.type === 'image' ? '📷 Photo'
                : msg.type === 'video' ? '🎥 Video'
                : msg.type === 'audio' ? '🎤 Voice note'
-               : '📎 File';
+               : msg.type === 'file'  ? '📎 ' + (msg.name || 'File')
+               : '📄 Document';
 
     const n = new Notification(`${uAvatar} ${uName}`, {
       body,
@@ -1527,11 +1559,41 @@ async function uploadImageFile(file, viewOnce) {
   }
 }
 
+async function uploadStorageFile(file, folder, msgType) {
+  toast('⏫ Uploading…');
+  try {
+    const storageRef = sRef(storage, `${folder}/${CCI}/${Date.now()}_${file.name}`);
+    await uploadBytes(storageRef, file);
+    const url = await getDownloadURL(storageRef);
+    await sendData({ type: msgType, url, name: file.name, size: file.size, mime: file.type });
+    toast('✅ Sent!');
+  } catch (err) {
+    console.error(err);
+    toast('❌ Upload failed: ' + err.message);
+  }
+}
+
 function fmtSize(bytes) {
   if (!bytes) return '';
   if (bytes < 1024)        return bytes + ' B';
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function fileIcon(mime, name) {
+  if (!mime) mime = '';
+  if (mime.startsWith('video/'))        return { ico:'fa-file-video',  col:'#e53935' };
+  if (mime === 'application/pdf')       return { ico:'fa-file-pdf',    col:'#f57f17' };
+  if (mime.includes('word') || name?.endsWith('.docx') || name?.endsWith('.doc'))
+                                        return { ico:'fa-file-word',   col:'#1565c0' };
+  if (mime.includes('sheet') || name?.endsWith('.xlsx') || name?.endsWith('.xls'))
+                                        return { ico:'fa-file-excel',  col:'#2e7d32' };
+  if (mime.includes('presentation') || name?.endsWith('.pptx') || name?.endsWith('.ppt'))
+                                        return { ico:'fa-file-powerpoint', col:'#bf360c' };
+  if (mime.includes('zip') || mime.includes('rar') || mime.includes('compressed'))
+                                        return { ico:'fa-file-archive', col:'#6a1b9a' };
+  if (mime.startsWith('text/'))         return { ico:'fa-file-alt',    col:'#00838f' };
+  return                                       { ico:'fa-file',        col:'#6c63ff' };
 }
 
 function lmPreview(lm) {
@@ -1540,6 +1602,7 @@ function lmPreview(lm) {
   if (lm.type === 'image')    return lm.viewOnce ? '👁️ View once' : '📷 Photo';
   if (lm.type === 'video')    return '🎥 Video';
   if (lm.type === 'document') return '📄 ' + (lm.name || 'Document');
+  if (lm.type === 'file')     return '📎 ' + (lm.name || 'File');
   return '📎';
 }
 
@@ -1951,6 +2014,9 @@ function startMusicSync(chatId) {
 // ── file input listeners ──
 el('fi-media').addEventListener('change', e => handleFilePick(e, 'media'));
 el('fi-vo').addEventListener('change',    e => handleFilePick(e, 'viewonce'));
+el('fi-video').addEventListener('change', e => handleFilePick(e, 'video'));
+el('fi-doc').addEventListener('change',   e => handleFilePick(e, 'doc'));
+el('fi-any').addEventListener('change',   e => handleFilePick(e, 'any'));
 
 // ── typing listener ──
 el('msgi').addEventListener('input', () => { onTyping(); vnUpdateBtn(); });

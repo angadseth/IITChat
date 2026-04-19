@@ -391,8 +391,11 @@
             <!-- Attach Menu -->
             <div class="amnl hidden" id="amnl">
               <div class="amo" onclick="pickFile('media')"><i class="fa fa-image" style="color:#6c63ff"></i> Photo</div>
-              <div class="amo" onclick="pickFile('camera')"><i class="fa fa-camera" style="color:#43e97b"></i> Camera</div>
-              <div class="amo" onclick="pickFile('viewonce')"><i class="fa fa-eye" style="color:#ff6584"></i> View Once Photo</div>
+              <div class="amo" onclick="pickFile('video')"><i class="fa fa-video" style="color:#ff4f6b"></i> Video</div>
+              <div class="amo" onclick="pickFile('doc')"><i class="fa fa-file-alt" style="color:#f57f17"></i> Document</div>
+              <div class="amo" onclick="pickFile('any')"><i class="fa fa-paperclip" style="color:#43e97b"></i> Any File</div>
+              <div class="amo" onclick="pickFile('camera')"><i class="fa fa-camera" style="color:#00cfff"></i> Camera</div>
+              <div class="amo" onclick="pickFile('viewonce')"><i class="fa fa-eye" style="color:#ff6584"></i> View Once</div>
             </div>
 
             <!-- Emoji Picker -->
@@ -527,6 +530,9 @@
 <!-- Hidden file inputs -->
 <input type="file" id="fi-media" accept="image/*" hidden>
 <input type="file" id="fi-vo"    accept="image/*" hidden>
+<input type="file" id="fi-video" accept="video/*" hidden>
+<input type="file" id="fi-doc"   accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar" hidden>
+<input type="file" id="fi-any"   hidden>
 
 <!-- Lightbox -->
 <div class="lb hidden" id="lb" onclick="closeLB(event)">

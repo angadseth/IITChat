@@ -2018,6 +2018,72 @@ el('fi-video').addEventListener('change', e => handleFilePick(e, 'video'));
 el('fi-doc').addEventListener('change',   e => handleFilePick(e, 'doc'));
 el('fi-any').addEventListener('change',   e => handleFilePick(e, 'any'));
 
+// ── Drag & Drop to send files ──
+(function initDragDrop() {
+  const zone    = el('acd');
+  const overlay = el('dd-overlay');
+  const icoEl   = el('dd-ico');
+  const subEl   = el('dd-sub');
+  let depth = 0;   // track nested dragenter/dragleave
+
+  function getFileInfo(dt) {
+    const items = [...(dt?.items || [])];
+    const f = items[0];
+    if (!f) return { ico: '📎', sub: 'Release to upload' };
+    const mime = f.type || '';
+    if (mime.startsWith('image/'))  return { ico: '📷', sub: 'Photo will be sent' };
+    if (mime.startsWith('video/'))  return { ico: '🎥', sub: 'Video will be uploaded' };
+    if (mime === 'application/pdf') return { ico: '📄', sub: 'PDF will be sent' };
+    if (mime.includes('word') || mime.includes('spreadsheet') || mime.includes('presentation'))
+                                    return { ico: '📄', sub: 'Document will be sent' };
+    return { ico: '📎', sub: 'File will be uploaded' };
+  }
+
+  zone.addEventListener('dragenter', e => {
+    if (!CCI) return;
+    if (![...e.dataTransfer.items].some(i => i.kind === 'file')) return;
+    e.preventDefault();
+    depth++;
+    if (depth === 1) {
+      overlay.classList.remove('hidden');
+      const info = getFileInfo(e.dataTransfer);
+      icoEl.textContent = info.ico;
+      subEl.textContent = info.sub;
+    }
+  });
+
+  zone.addEventListener('dragover', e => {
+    if (!CCI) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  });
+
+  zone.addEventListener('dragleave', e => {
+    depth--;
+    if (depth <= 0) { depth = 0; overlay.classList.add('hidden'); }
+  });
+
+  zone.addEventListener('drop', async e => {
+    e.preventDefault();
+    depth = 0;
+    overlay.classList.add('hidden');
+    if (!CCI) return;
+    const file = e.dataTransfer.files[0];
+    if (!file) return;
+    const mime = file.type || '';
+    if (mime.startsWith('image/')) {
+      if (file.size > 10 * 1024 * 1024) { toast('❌ Max image size: 10 MB'); return; }
+      await uploadImageFile(file, false);
+    } else if (mime.startsWith('video/')) {
+      if (file.size > 60 * 1024 * 1024) { toast('❌ Max video size: 60 MB'); return; }
+      await uploadStorageFile(file, 'videos', 'video');
+    } else {
+      if (file.size > 30 * 1024 * 1024) { toast('❌ Max file size: 30 MB'); return; }
+      await uploadStorageFile(file, 'files', 'file');
+    }
+  });
+})();
+
 // ── typing listener ──
 el('msgi').addEventListener('input', () => { onTyping(); vnUpdateBtn(); });
 

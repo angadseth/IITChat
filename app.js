@@ -629,7 +629,8 @@ function mkMsg(msg, isMe, con) {
     <div class="mc">
       ${!isMe && !con ? `<div class="msn">${escHtml(senderName)}</div>` : ''}
       <div class="bw">
-        <div class="bub${emojiOnly ? ' emoji-bub' : ''}" onclick="showRP(event,this,'${msg.id}',${isMe})">${replyHtml}${body}</div>
+        <div class="bub${emojiOnly ? ' emoji-bub' : ''}">${replyHtml}${body}</div>
+        <button class="bub-act" onclick="event.stopPropagation();showRP(event,this.closest('.bw').querySelector('.bub'),'${msg.id}',${isMe})" title="Reply / React">⋯</button>
       </div>
       ${rHtml ? `<div class="rcts">${rHtml}</div>` : ''}
       <div class="mm">

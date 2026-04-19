@@ -22,7 +22,6 @@ export function initMsgMenu(getState, focusInput) {
     e.stopPropagation();
     document.querySelectorAll('.rpk').forEach(p => p.remove());
 
-    // Derive text + sender name from DOM
     const msgRow     = bub.closest('.mr');
     const msgText    = msgRow?.querySelector('.bub')?.innerText?.trim()   || '';
     const domName    = msgRow?.querySelector('.msn')?.textContent?.trim() || '';
@@ -38,7 +37,7 @@ export function initMsgMenu(getState, focusInput) {
         <button class="rpk-act" onclick="${cl}window.setReply('${escJ(mid)}','${escJ(msgText)}','${escJ(senderName)}')" title="Reply">
           ${IC.reply}<span>Reply</span>
         </button>
-        <button class="rpk-act" onclick="${cl}window.copyMsg('${escJ(mid)}')" title="Copy text">
+        <button class="rpk-act rpk-copy" onclick="${cl}window.copyMsg('${escJ(mid)}')" title="Copy text">
           ${IC.copy}<span>Copy</span>
         </button>
       </div>
@@ -52,9 +51,19 @@ export function initMsgMenu(getState, focusInput) {
         </div>
       </div>`;
 
-    bub.appendChild(picker);
+    // Position popup near the trigger button, respecting screen edges
+    const bw = bub.closest('.bw');
+    bw.appendChild(picker);
+    const pr = picker.getBoundingClientRect();
+    const wr = bw.getBoundingClientRect();
+    // flip up if too close to bottom
+    if (pr.bottom > window.innerHeight - 20) {
+      picker.style.top  = 'auto';
+      picker.style.bottom = '100%';
+      picker.style.marginBottom = '6px';
+      picker.style.marginTop = '0';
+    }
 
-    // Close on outside click
     setTimeout(() => document.addEventListener('click', () => {
       picker.remove();
     }, { once: true }), 50);

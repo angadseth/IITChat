@@ -537,7 +537,7 @@ function updateAllTicks() {
     if (!tick) return;
     const ts = +row.dataset.ts;
     const seen = otherSeenUpTo >= ts;
-    tick.className = seen ? 'mck seen' : 'mck sent';
+    tick.className = seen ? 'mck seen' : 'mck';
     tick.title = seen ? 'Seen' : 'Delivered';
   });
 }
@@ -670,7 +670,7 @@ function mkMsg(msg, isMe, con) {
       <div class="mm">
         <span>${fmtTime(msg.ts)}</span>
         ${expH < 24 ? `<span style="opacity:.45;font-size:9px">🕐${expH}h</span>` : ''}
-        ${isMe ? `<span class="mck ${!isGroup && otherSeenUpTo >= msg.ts ? 'seen' : 'sent'}" title="${!isGroup && otherSeenUpTo >= msg.ts ? 'Seen' : 'Delivered'}"><i class="fa fa-check-double"></i></span>` : ''}
+        ${isMe ? `<span class="mck${!isGroup && otherSeenUpTo >= msg.ts ? ' seen' : ''}" title="${!isGroup && otherSeenUpTo >= msg.ts ? 'Seen' : 'Delivered'}"><i class="fa fa-check-double"></i></span>` : ''}
       </div>
     </div>`;
 

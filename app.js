@@ -478,12 +478,12 @@ async function openChat(uid, u) {
   });
 
   // ── message seen tracking ──
+  // Store under users/${myUid}/seenChats/${CCI} — safe path, user owns their node
   otherSeenUpTo = 0;
   if (seenUnsubFn) { seenUnsubFn(); seenUnsubFn = null; }
-  // tell the other side I have this chat open
-  set(ref(db, `chats/${CCI}/seenUpTo/${CU.uid}`), Date.now()).catch(() => {});
-  // listen to whether they've seen my messages
-  seenUnsubFn = onValue(ref(db, `chats/${CCI}/seenUpTo/${uid}`), snap => {
+  markChatSeen();
+  // listen to other user's seen timestamp for this chat
+  seenUnsubFn = onValue(ref(db, `users/${uid}/seenChats/${CCI}`), snap => {
     otherSeenUpTo = snap.val() || 0;
     updateAllTicks();
   });
@@ -521,12 +521,15 @@ function loadMsgs() {
     });
     area.scrollTop = area.scrollHeight;
     checkScrollBtn();
-    // mark all visible messages as seen (I'm looking at this chat)
-    if (!isGroup) {
-      set(ref(db, `chats/${CCI}/seenUpTo/${CU.uid}`), Date.now()).catch(() => {});
-      updateAllTicks();
-    }
+    if (!isGroup) { markChatSeen(); updateAllTicks(); }
   });
+}
+
+// write my "seen up to now" for this chat under my own user node
+function markChatSeen() {
+  if (!CCI || !CU) return;
+  set(ref(db, `users/${CU.uid}/seenChats/${CCI}`), Date.now())
+    .catch(err => console.warn('markChatSeen failed:', err));
 }
 
 // update tick colors for all my rendered messages based on otherSeenUpTo

@@ -825,6 +825,88 @@ body {
 .msg-highlight .bub { animation: msgFlash 1.5s ease; }
 
 
+/* ── SEND FILE PREVIEW MODAL ── */
+.sf-modal {
+  width: min(520px, 95vw);
+  max-height: 90vh;
+  background: var(--bg2);
+  border-radius: 18px;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 24px 60px rgba(0,0,0,.5);
+  animation: pI .2s ease;
+}
+.sf-topbar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.sf-back {
+  background: none; border: none; color: var(--text); cursor: pointer;
+  font-size: 15px; opacity: .7; padding: 4px 6px; border-radius: 8px;
+  transition: var(--tr);
+}
+.sf-back:hover { opacity: 1; background: var(--bg3); }
+.sf-title { font-size: 15px; font-weight: 700; }
+.sf-preview {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  background: var(--bg1); min-height: 200px; max-height: 55vh;
+  overflow: hidden;
+}
+.sf-img-prev {
+  max-width: 100%; max-height: 55vh;
+  object-fit: contain; display: block;
+}
+.sf-vid-prev {
+  max-width: 100%; max-height: 55vh;
+  outline: none;
+}
+.sf-file-prev {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  padding: 36px 24px; text-align: center;
+}
+.sf-fname {
+  font-size: 14px; font-weight: 600; color: var(--text);
+  word-break: break-all; max-width: 280px;
+}
+.sf-fsize { font-size: 11px; color: var(--text2); }
+.sf-bottom {
+  flex-shrink: 0; padding: 12px 14px; border-top: 1px solid var(--border);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.sf-caption-row {
+  display: flex; align-items: center; gap: 10px;
+}
+.sf-caption {
+  flex: 1; background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 22px; padding: 9px 16px; font-size: 13px;
+  color: var(--text); outline: none; font-family: inherit;
+  transition: border-color .2s;
+}
+.sf-caption:focus { border-color: var(--accent); }
+.sf-caption::placeholder { color: var(--text3); }
+.sf-send-btn {
+  width: 44px; height: 44px; border-radius: 50%;
+  background: var(--accent); border: none; color: #fff;
+  font-size: 16px; cursor: pointer; display: flex; align-items: center;
+  justify-content: center; flex-shrink: 0; transition: var(--tr);
+  box-shadow: 0 3px 12px rgba(108,99,255,.4);
+}
+.sf-send-btn:hover:not(:disabled) { filter: brightness(1.12); transform: scale(1.07); }
+.sf-send-btn:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+.sf-prog-wrap {
+  display: flex; align-items: center; gap: 10px;
+}
+.sf-prog-track {
+  flex: 1; height: 4px; background: var(--border); border-radius: 4px; overflow: hidden;
+}
+.sf-prog-bar {
+  height: 100%; background: var(--accent); border-radius: 4px;
+  width: 0%; transition: width .3s ease;
+}
+.sf-prog-txt { font-size: 11px; color: var(--text2); white-space: nowrap; min-width: 110px; }
+
 /* ── DRAG & DROP OVERLAY ── */
 .dd-overlay {
   position: absolute; inset: 0; z-index: 200;

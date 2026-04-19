@@ -22,7 +22,7 @@ import {
   ref, set, get, push, onValue, onChildAdded, update, remove, onDisconnect, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 import {
-  getStorage, ref as sRef, uploadBytes, getDownloadURL
+  getStorage, ref as sRef, uploadBytes, uploadBytesResumable, getDownloadURL
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
 
 // ══════════════════════════════════════════════════════
@@ -76,6 +76,9 @@ let grpData       = null;   // current group object
 let memberCache   = {};     // uid → {name,avatar} for group messages
 let unreadCounts  = JSON.parse(localStorage.getItem('iitchat-unread') || '{}');
 let ctListeners   = [];     // contact-level listeners to clean up on reload
+
+// ── file send preview state ──
+let pendingFile = null;   // { file, msgType, folder }
 
 // ── music state ──
 let ytPlayer       = null;   // YouTube IFrame player
@@ -935,14 +938,14 @@ async function handleFilePick(e, type) {
   if (!file) return;
   if (type === 'media' || type === 'viewonce') {
     if (!file.type.startsWith('image/')) { toast('❌ Sirf images supported hain'); return; }
-    await uploadImageFile(file, type === 'viewonce');
+    openSendPreview(file, type === 'viewonce' ? 'viewonce' : 'image');
   } else if (type === 'video') {
     if (!file.type.startsWith('video/')) { toast('❌ Video file select karo'); return; }
     if (file.size > 60 * 1024 * 1024) { toast('❌ Max video size: 60 MB'); return; }
-    await uploadStorageFile(file, 'videos', 'video');
+    openSendPreview(file, 'video');
   } else if (type === 'doc' || type === 'any') {
     if (file.size > 30 * 1024 * 1024) { toast('❌ Max file size: 30 MB'); return; }
-    await uploadStorageFile(file, 'files', 'file');
+    openSendPreview(file, 'file');
   }
 }
 
@@ -1484,9 +1487,9 @@ window.capturePhoto = () => {
   canvas.height = video.videoHeight;
   canvas.getContext('2d').drawImage(video, 0, 0);
   closeCAM();
-  canvas.toBlob(async blob => {
+  canvas.toBlob(blob => {
     const file = new File([blob], `photo_${Date.now()}.jpg`, { type: 'image/jpeg' });
-    await uploadImageFile(file, false);
+    openSendPreview(file, 'image');
   }, 'image/jpeg', 0.88);
 };
 
@@ -1560,18 +1563,129 @@ async function uploadImageFile(file, viewOnce) {
 }
 
 async function uploadStorageFile(file, folder, msgType) {
-  toast('⏫ Uploading…');
+  // direct upload (no preview) — kept for internal use
+  const storageRef = sRef(storage, `${folder}/${CCI}/${Date.now()}_${file.name}`);
+  const task = uploadBytesResumable(storageRef, file);
+  return new Promise((resolve, reject) => {
+    task.on('state_changed', null, reject, async () => {
+      const url = await getDownloadURL(task.snapshot.ref);
+      await sendData({ type: msgType, url, name: file.name, size: file.size, mime: file.type });
+      resolve();
+    });
+  });
+}
+
+// ── Send Preview (WhatsApp-style confirm before send) ──
+function openSendPreview(file, msgType) {
+  if (!CCI) { toast('Open a chat first'); return; }
+  pendingFile = { file, msgType };
+  const ov = el('sfm');
+  const prev = el('sf-preview');
+  const caption = el('sf-caption');
+  caption.value = '';
+  prev.innerHTML = '';
+
+  if (msgType === 'image' || msgType === 'viewonce') {
+    const obj = URL.createObjectURL(file);
+    const img = document.createElement('img');
+    img.src = obj; img.className = 'sf-img-prev';
+    img.onload = () => URL.revokeObjectURL(obj);
+    prev.appendChild(img);
+  } else if (msgType === 'video') {
+    const obj = URL.createObjectURL(file);
+    const vid = document.createElement('video');
+    vid.src = obj; vid.controls = true; vid.className = 'sf-vid-prev';
+    vid.onloadedmetadata = () => URL.revokeObjectURL(obj);
+    prev.appendChild(vid);
+  } else {
+    const { ico, col } = fileIcon(file.type, file.name);
+    prev.innerHTML = `
+      <div class="sf-file-prev">
+        <i class="fa ${ico}" style="color:${col};font-size:52px"></i>
+        <div class="sf-fname">${escHtml(file.name)}</div>
+        <div class="sf-fsize">${fmtSize(file.size)}</div>
+      </div>`;
+  }
+
+  // reset progress
+  el('sf-prog-wrap').classList.add('hidden');
+  el('sf-prog-bar').style.width = '0%';
+  el('sf-prog-txt').textContent = 'Uploading… 0%';
+  el('sf-send').disabled = false;
+  el('sf-send').textContent = 'Send';
+
+  ov.classList.add('show');
+  setTimeout(() => caption.focus(), 100);
+}
+
+window.closeSF = () => {
+  el('sfm').classList.remove('show');
+  pendingFile = null;
+};
+
+window.doSendFile = async () => {
+  if (!pendingFile) return;
+  const { file, msgType } = pendingFile;
+  const caption = el('sf-caption').value.trim();
+  const sendBtn = el('sf-send');
+  const progWrap = el('sf-prog-wrap');
+  const progBar  = el('sf-prog-bar');
+  const progTxt  = el('sf-prog-txt');
+
+  sendBtn.disabled = true;
+  sendBtn.textContent = 'Uploading…';
+  progWrap.classList.remove('hidden');
+
   try {
-    const storageRef = sRef(storage, `${folder}/${CCI}/${Date.now()}_${file.name}`);
-    await uploadBytes(storageRef, file);
-    const url = await getDownloadURL(storageRef);
-    await sendData({ type: msgType, url, name: file.name, size: file.size, mime: file.type });
-    toast('✅ Sent!');
+    if (msgType === 'image' || msgType === 'viewonce') {
+      // Images via ImgBB (faster, no progress but keep it simple)
+      progBar.style.width = '40%';
+      progTxt.textContent = 'Uploading… please wait';
+      const b64  = await toBase64(file);
+      const form = new FormData();
+      form.append('image', b64.split(',')[1]);
+      const res  = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_KEY}`, { method:'POST', body:form });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error?.message || 'Upload failed');
+      progBar.style.width = '90%';
+      const data = { type: 'image', url: json.data.url, name: file.name, size: file.size };
+      if (msgType === 'viewonce') data.viewOnce = true;
+      if (caption) data.caption = caption;
+      await sendData(data);
+    } else {
+      // Video / file via Firebase Storage with real progress
+      const folder = msgType === 'video' ? 'videos' : 'files';
+      const storageRef = sRef(storage, `${folder}/${CCI}/${Date.now()}_${file.name}`);
+      const task = uploadBytesResumable(storageRef, file);
+      await new Promise((resolve, reject) => {
+        task.on('state_changed',
+          snap => {
+            const pct = Math.round(snap.bytesTransferred / snap.totalBytes * 100);
+            progBar.style.width = pct + '%';
+            progTxt.textContent = `Uploading… ${pct}%`;
+          },
+          reject,
+          async () => {
+            progBar.style.width = '95%';
+            const url = await getDownloadURL(task.snapshot.ref);
+            const data = { type: msgType, url, name: file.name, size: file.size, mime: file.type };
+            if (caption) data.caption = caption;
+            await sendData(data);
+            resolve();
+          }
+        );
+      });
+    }
+    progBar.style.width = '100%';
+    progTxt.textContent = '✅ Sent!';
+    setTimeout(() => { el('sfm').classList.remove('show'); pendingFile = null; }, 400);
   } catch (err) {
     console.error(err);
-    toast('❌ Upload failed: ' + err.message);
+    progTxt.textContent = '❌ Failed: ' + err.message;
+    sendBtn.disabled = false;
+    sendBtn.textContent = 'Retry';
   }
-}
+};
 
 function fmtSize(bytes) {
   if (!bytes) return '';
@@ -2063,7 +2177,7 @@ el('fi-any').addEventListener('change',   e => handleFilePick(e, 'any'));
     if (depth <= 0) { depth = 0; overlay.classList.add('hidden'); }
   });
 
-  zone.addEventListener('drop', async e => {
+  zone.addEventListener('drop', e => {
     e.preventDefault();
     depth = 0;
     overlay.classList.add('hidden');
@@ -2073,13 +2187,13 @@ el('fi-any').addEventListener('change',   e => handleFilePick(e, 'any'));
     const mime = file.type || '';
     if (mime.startsWith('image/')) {
       if (file.size > 10 * 1024 * 1024) { toast('❌ Max image size: 10 MB'); return; }
-      await uploadImageFile(file, false);
+      openSendPreview(file, 'image');
     } else if (mime.startsWith('video/')) {
       if (file.size > 60 * 1024 * 1024) { toast('❌ Max video size: 60 MB'); return; }
-      await uploadStorageFile(file, 'videos', 'video');
+      openSendPreview(file, 'video');
     } else {
       if (file.size > 30 * 1024 * 1024) { toast('❌ Max file size: 30 MB'); return; }
-      await uploadStorageFile(file, 'files', 'file');
+      openSendPreview(file, 'file');
     }
   });
 })();

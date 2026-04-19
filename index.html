@@ -537,6 +537,32 @@
   </div>
 </div>
 
+<!-- ═══ SEND FILE PREVIEW MODAL ═══ -->
+<div class="ovl" id="sfm">
+  <div class="sf-modal">
+    <div class="sf-topbar">
+      <button class="sf-back" onclick="closeSF()"><i class="fa fa-arrow-left"></i></button>
+      <span class="sf-title">Send File</span>
+    </div>
+    <div class="sf-preview" id="sf-preview"></div>
+    <div class="sf-bottom">
+      <div class="sf-caption-row">
+        <input class="sf-caption" id="sf-caption" placeholder="Add a caption… (optional)" maxlength="300"
+          onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();doSendFile();}">
+        <button class="sf-send-btn" id="sf-send" onclick="doSendFile()">
+          <i class="fa fa-paper-plane"></i>
+        </button>
+      </div>
+      <div class="sf-prog-wrap hidden" id="sf-prog-wrap">
+        <div class="sf-prog-track">
+          <div class="sf-prog-bar" id="sf-prog-bar"></div>
+        </div>
+        <span class="sf-prog-txt" id="sf-prog-txt">Uploading… 0%</span>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Hidden file inputs -->
 <input type="file" id="fi-media" accept="image/*" hidden>
 <input type="file" id="fi-vo"    accept="image/*" hidden>

@@ -481,14 +481,19 @@ body {
 
 .msn { font-size: 10px; color: var(--text3); font-weight: 500; margin-bottom: 2px; }
 
-.bw { display: flex; align-items: center; gap: 4px; position: relative; }
-.mr.me .bub-act { order: -1; }   /* button left of bubble for sent msgs */
+.bw { display: flex; align-items: stretch; gap: 6px; position: relative; }
+.mr.me .bub-act { order: -1; }
 .bub-act {
-  width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0;
-  background: none; border: none; color: var(--text3);
-  font-size: 15px; cursor: pointer; padding: 0;
+  width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
+  background: none; border: none; color: var(--text2);
+  font-size: 17px; cursor: pointer; padding: 0;
   display: flex; align-items: center; justify-content: center;
   opacity: 0; transition: opacity .15s, background .15s;
+  /* stick near bottom of viewport while scrolling through long messages */
+  position: sticky;
+  bottom: 10px;
+  align-self: flex-end;
+  margin-bottom: 4px;
 }
 .bw:hover .bub-act { opacity: 1; }
 .bub-act:hover { background: var(--bg3); color: var(--text); }

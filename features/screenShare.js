@@ -1,27 +1,36 @@
 // ══════════════════════════════════════════════════════
 //  features/screenShare.js  —  WebRTC screen sharing
+//  Video + audio only, no cursor/pointer
 // ══════════════════════════════════════════════════════
 
 const ICE_CFG = {
-  iceServers:[
-    {urls:'stun:stun.l.google.com:19302'},
-    {urls:'stun:stun1.l.google.com:19302'},
-    {urls:'stun:stun2.l.google.com:19302'},
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:stun3.l.google.com:19302' },
+    {
+      urls: [
+        'turn:openrelay.metered.ca:80',
+        'turn:openrelay.metered.ca:443',
+        'turn:openrelay.metered.ca:443?transport=tcp'
+      ],
+      username:   'openrelayproject',
+      credential: 'openrelayproject'
+    }
   ]
 };
 
 export function initScreenShare(db, dbRef, dbSet, dbGet, dbOnValue, dbRemove, dbPush, dbUpdate, getState, toastFn) {
 
-  let pc             = null;
-  let localStream    = null;
-  let unsubIncoming  = null;
-  let unsubAns       = null;
-  let unsubVICE      = null;
-  let cursorThrottle = 0;
-  let overlayWin     = null;
+  let pc            = null;
+  let localStream   = null;
+  let unsubIncoming = null;
+  let unsubAns      = null;
+  let unsubVICE     = null;
 
   // ─────────────────────────────────
-  //  Watch bar + helpers
+  //  Watch bar
   // ─────────────────────────────────
   function showWatchBar(sharerName) {
     let bar = document.getElementById('ss-watch-bar');
@@ -43,7 +52,9 @@ export function initScreenShare(db, dbRef, dbSet, dbGet, dbOnValue, dbRemove, db
   function setShareUI(active) {
     const btn = document.getElementById('ss-btn');
     if (!btn) return;
-    btn.innerHTML = active ? '<i class="fa fa-stop-circle" style="color:#ff4f6b"></i>' : '<i class="fa fa-desktop"></i>';
+    btn.innerHTML = active
+      ? '<i class="fa fa-stop-circle" style="color:#ff4f6b"></i>'
+      : '<i class="fa fa-desktop"></i>';
     btn.title = active ? 'Stop screen share' : 'Share screen';
     btn.classList.toggle('ss-active', active);
   }
@@ -54,7 +65,6 @@ export function initScreenShare(db, dbRef, dbSet, dbGet, dbOnValue, dbRemove, db
   window.ssInit = (cci) => {
     unsubIncoming?.();
     hideWatchBar();
-
     unsubIncoming = dbOnValue(dbRef(db, `screenShare/${cci}`), snap => {
       const data = snap.val();
       const { CU } = getState();
@@ -74,7 +84,7 @@ export function initScreenShare(db, dbRef, dbSet, dbGet, dbOnValue, dbRemove, db
 
     try {
       localStream = await navigator.mediaDevices.getDisplayMedia({
-        video: { cursor: 'always', frameRate: { ideal: 30, max: 60 } },
+        video: { frameRate: { ideal: 30, max: 60 } },
         audio: true
       });
     } catch { return; }
@@ -87,20 +97,6 @@ export function initScreenShare(db, dbRef, dbSet, dbGet, dbOnValue, dbRemove, db
       if (e.candidate) dbPush(dbRef(db, `screenShare/${CCI}/ice_sharer`), e.candidate.toJSON());
     };
 
-    // push sharer cursor (viewer sees it as purple dot on video)
-    const onMouse = e => {
-      const now = Date.now();
-      if (now - cursorThrottle < 40) return;
-      cursorThrottle = now;
-      dbSet(dbRef(db, `screenShare/${CCI}/cursors/sharer`), {
-        x: e.clientX / window.innerWidth,
-        y: e.clientY / window.innerHeight,
-        name: CU?.displayName || 'Sharer'
-      });
-    };
-    document.addEventListener('mousemove', onMouse);
-    localStream.getVideoTracks()[0]._onMouse = onMouse;
-
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
 
@@ -108,34 +104,39 @@ export function initScreenShare(db, dbRef, dbSet, dbGet, dbOnValue, dbRemove, db
       active:     true,
       by:         CU.uid,
       sharerName: CU.displayName || 'Partner',
-      vpW:        window.innerWidth,
-      vpH:        window.innerHeight,
-      winX:       window.screenX,
-      winY:       window.screenY,
-      chromeW:    window.outerWidth  - window.innerWidth,
-      chromeH:    window.outerHeight - window.innerHeight,
       offer:      { sdp: offer.sdp, type: offer.type }
+    });
+
+    // queue viewer ICE candidates that arrive before answer/remote-desc is set
+    const pendingICE = [];
+    let remoteReady  = false;
+
+    const flushICE = () => {
+      while (pendingICE.length) {
+        pc?.addIceCandidate(new RTCIceCandidate(pendingICE.shift())).catch(() => {});
+      }
+    };
+
+    const seenKeys = new Set();
+    unsubVICE = dbOnValue(dbRef(db, `screenShare/${CCI}/ice_viewer`), snap => {
+      snap.forEach(child => {
+        if (seenKeys.has(child.key)) return;
+        seenKeys.add(child.key);
+        const c = child.val();
+        if (remoteReady) pc?.addIceCandidate(new RTCIceCandidate(c)).catch(() => {});
+        else pendingICE.push(c);
+      });
     });
 
     unsubAns = dbOnValue(dbRef(db, `screenShare/${CCI}/answer`), async snap => {
       if (!snap.val() || pc?.remoteDescription) return;
       await pc.setRemoteDescription(new RTCSessionDescription(snap.val()));
+      remoteReady = true;
+      flushICE();
     });
-
-    unsubVICE = dbOnValue(dbRef(db, `screenShare/${CCI}/ice_viewer`), snap => {
-      snap.forEach(c => pc?.addIceCandidate(new RTCIceCandidate(c.val())).catch(() => {}));
-    });
-
-    // Open transparent overlay — positions viewer cursor at exact screen coords
-    overlayWin = window.open(
-      `ss-overlay.html?cci=${encodeURIComponent(CCI)}`,
-      'ss-overlay',
-      `width=${screen.width},height=${screen.height},top=0,left=0,` +
-      `menubar=no,toolbar=no,location=no,status=no`
-    );
 
     setShareUI(true);
-    toastFn('🖥️ Sharing started — viewer cursor will appear on your screen');
+    toastFn('🖥️ Sharing started');
   };
 
   // ─────────────────────────────────
@@ -143,13 +144,10 @@ export function initScreenShare(db, dbRef, dbSet, dbGet, dbOnValue, dbRemove, db
   // ─────────────────────────────────
   window.stopSS = async () => {
     const { CCI } = getState();
-    const track = localStream?.getVideoTracks()[0];
-    if (track?._onMouse) document.removeEventListener('mousemove', track._onMouse);
     localStream?.getTracks().forEach(t => t.stop());
     pc?.close();
     pc = null; localStream = null;
     unsubAns?.(); unsubVICE?.();
-    overlayWin?.close(); overlayWin = null;
     if (CCI) await dbRemove(dbRef(db, `screenShare/${CCI}`));
     setShareUI(false);
     toastFn('🖥️ Screen share stopped');
@@ -159,11 +157,10 @@ export function initScreenShare(db, dbRef, dbSet, dbGet, dbOnValue, dbRemove, db
   //  Open viewer window
   // ─────────────────────────────────
   window.ssWatch = () => {
-    const { CCI, CU } = getState();
+    const { CCI } = getState();
     if (!CCI) return;
-    const name = encodeURIComponent(CU?.displayName || 'Viewer');
     window.open(
-      `screenshare.html?cci=${encodeURIComponent(CCI)}&name=${name}`,
+      `screenshare.html?cci=${encodeURIComponent(CCI)}`,
       '_blank',
       'width=1280,height=760,menubar=no,toolbar=no,location=no,status=no'
     );

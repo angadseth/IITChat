@@ -83,6 +83,12 @@ let pendingFile = null;   // { file, msgType, folder }
 // ── message seen state ──
 let otherSeenUpTo = 0;   // timestamp: up to which ts the other user has seen
 let seenUnsubFn   = null; // firebase listener cleanup
+let lastMsgTs     = 0;   // ts of last message currently rendered in chat
+
+// register visibilitychange once at module level — marks seen when user tabs back in
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && CCI && !isGroup) markChatSeen();
+});
 
 // ── music state ──
 let ytPlayer       = null;   // YouTube IFrame player
@@ -478,12 +484,11 @@ async function openChat(uid, u) {
   });
 
   // ── message seen tracking ──
-  // Store under users/${myUid}/seenChats/${CCI} — safe path, user owns their node
   otherSeenUpTo = 0;
+  lastMsgTs = 0;
   if (seenUnsubFn) { seenUnsubFn(); seenUnsubFn = null; }
-  markChatSeen();
-  // listen to other user's seen timestamp for this chat
-  seenUnsubFn = onValue(ref(db, `users/${uid}/seenChats/${CCI}`), snap => {
+  // listen to other user's seen timestamp — stored inside the shared chat node
+  seenUnsubFn = onValue(ref(db, `chats/${CCI}/seenBy/${uid}`), snap => {
     otherSeenUpTo = snap.val() || 0;
     updateAllTicks();
   });
@@ -505,7 +510,8 @@ function loadMsgs() {
     if (!msgs) return;
 
     let prevDate = '', prevSender = '';
-    Object.values(msgs).sort((a, b) => a.ts - b.ts).forEach(msg => {
+    const sortedMsgs = Object.values(msgs).sort((a, b) => a.ts - b.ts);
+    sortedMsgs.forEach(msg => {
       const d = new Date(msg.ts).toDateString();
       if (d !== prevDate) {
         const dl = document.createElement('div');
@@ -519,18 +525,25 @@ function loadMsgs() {
       area.appendChild(mkMsg(msg, isMe, con));
       prevSender = msg.sender;
     });
+    // track last rendered message ts — this is what we write as "seen up to"
+    lastMsgTs = sortedMsgs.at(-1)?.ts || 0;
     area.scrollTop = area.scrollHeight;
     checkScrollBtn();
-    if (!isGroup) { markChatSeen(); updateAllTicks(); }
+    if (!isGroup && document.visibilityState === 'visible') { markChatSeen(); updateAllTicks(); }
   });
 }
 
-// write my "seen up to now" for this chat under my own user node
+// write the last-seen message timestamp — NOT Date.now() — so we only mark what was actually rendered
 function markChatSeen() {
-  if (!CCI || !CU) return;
-  set(ref(db, `users/${CU.uid}/seenChats/${CCI}`), Date.now())
+  if (!CCI || !CU || !lastMsgTs || document.visibilityState !== 'visible') return;
+  set(ref(db, `chats/${CCI}/seenBy/${CU.uid}`), lastMsgTs)
     .catch(err => console.warn('markChatSeen failed:', err));
 }
+
+// when user switches back to this tab, mark seen if a chat is open
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && CCI && !isGroup) markChatSeen();
+});
 
 // update tick colors for all my rendered messages based on otherSeenUpTo
 function updateAllTicks() {

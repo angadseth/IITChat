@@ -1738,12 +1738,15 @@ window.doSendFile = async () => {
             progTxt.textContent = `Uploading… ${pct}%`;
           },
           err => {
+            console.error('Storage upload error:', err.code, err.message);
             if (err.code === 'storage/unauthorized')
-              reject(new Error('Firebase Storage rules block this — set: allow read, write: if request.auth != null'));
+              reject(new Error('❌ Firebase Storage rules block uploads — fix rules in Firebase Console (Storage → Rules)'));
             else if (err.code === 'storage/quota-exceeded')
-              reject(new Error('Storage quota exceeded'));
+              reject(new Error('❌ Firebase Storage quota full'));
+            else if (err.code === 'storage/canceled')
+              reject(new Error('❌ Upload cancelled'));
             else
-              reject(err);
+              reject(new Error(`❌ Upload failed: ${err.code || err.message}`));
           },
           () => {  // ← NOT async — errors were silently swallowed before
             getDownloadURL(task.snapshot.ref).then(url => {

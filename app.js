@@ -335,7 +335,7 @@ function loadContacts() {
         </div>
         <div class="cii">
           <div class="cin">${u.name}</div>
-          <div class="cip">${lmPreview(lm)}</div>
+          <div class="cip">${lmPreview(lm, lm ? (lm.sender === CU?.uid ? 'You' : u.name.split(' ')[0]) : '')}</div>
         </div>
         <div class="cim">
           <div class="cit">${lm ? fmtTime(lm.ts) : ''}</div>
@@ -1174,7 +1174,7 @@ function loadGroups() {
         <div class="ciav" style="font-size:20px;background:var(--bg3)">${g.avatar || '👥'}</div>
         <div class="cii">
           <div class="cin">${escHtml(g.name)}</div>
-          <div class="cip">${lm ? lmPreview(lm) : mc + ' members'}</div>
+          <div class="cip">${lm ? lmPreview(lm, lm.sender === CU?.uid ? 'You' : (lm.senderName || '')) : mc + ' members'}</div>
         </div>
         <div class="cim"><div class="cit">${lm ? fmtTime(lm.ts) : ''}</div></div>`;
       item.onclick = () => openGroupChat(gid, g);
@@ -1812,14 +1812,15 @@ function fileIcon(mime, name) {
   return                                       { ico:'fa-file',        col:'#6c63ff' };
 }
 
-function lmPreview(lm) {
+function lmPreview(lm, senderName) {
   if (!lm) return 'Say hi! 👋';
-  if (lm.type === 'text')     return lm.text.substring(0, 35);
-  if (lm.type === 'image')    return lm.viewOnce ? '👁️ View once' : '📷 Photo';
-  if (lm.type === 'video')    return '🎥 Video';
-  if (lm.type === 'document') return '📄 ' + (lm.name || 'Document');
-  if (lm.type === 'file')     return '📎 ' + (lm.name || 'File');
-  return '📎';
+  const pre = senderName ? `<span class="cip-who">${escHtml(senderName)}: </span>` : '';
+  if (lm.type === 'text')     return pre + escHtml(lm.text?.substring(0, 35) || '');
+  if (lm.type === 'image')    return pre + (lm.viewOnce ? '👁️ View once' : '📷 Photo');
+  if (lm.type === 'video')    return pre + '🎥 Video';
+  if (lm.type === 'document') return pre + '📄 ' + (lm.name || 'Document');
+  if (lm.type === 'file')     return pre + '📎 ' + (lm.name || 'File');
+  return pre + '📎';
 }
 
 // ═══════════════════════════════════════

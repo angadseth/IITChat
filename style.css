@@ -336,6 +336,7 @@ body {
 .cii { flex: 1; min-width: 0; }
 .cin { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cip { font-size: 11px; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+.cip-who { color: var(--text); font-weight: 600; }
 .cim { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
 .cit { font-size: 10px; color: var(--text3); }
 .ubadge {

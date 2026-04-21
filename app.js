@@ -432,6 +432,8 @@ async function openChat(uid, u) {
   acd.style.display = 'flex';
 
   el('chav').innerHTML = avH(u.avatar, u.photoURL);
+  el('chav').onclick = u.photoURL ? () => openPicViewer(u.photoURL) : null;
+  el('chav').style.cursor = u.photoURL ? 'zoom-in' : '';
   el('chn').textContent  = u.name;
 
   const chs = el('chs');
@@ -675,7 +677,7 @@ function mkMsg(msg, isMe, con) {
   const senderName  = isGroup ? (sender.name     || '')   : (CCT?.name      || '');
 
   row.innerHTML = `
-    ${!isMe ? `<div class="mav">${avH(senderAv, senderPhoto)}</div>` : ''}
+    ${!isMe ? `<div class="mav"${senderPhoto ? ` onclick="openPicViewer('${senderPhoto}')" style="cursor:zoom-in"` : ''}>${avH(senderAv, senderPhoto)}</div>` : ''}
     <div class="mc">
       ${!isMe && !con ? `<div class="msn">${escHtml(senderName)}</div>` : ''}
       <div class="bw">
@@ -973,6 +975,22 @@ window.toggleEP = () => {
   el('amnl').classList.add('hidden');
   el('epnl').classList.toggle('hidden');
 };
+
+// ── Profile pic fullscreen viewer ──
+window.openPicViewer = (src) => {
+  const v = document.getElementById('pic-viewer');
+  document.getElementById('pic-viewer-img').src = src;
+  v.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+};
+window.closePicViewer = () => {
+  document.getElementById('pic-viewer').style.display = 'none';
+  document.getElementById('pic-viewer-img').src = '';
+  document.body.style.overflow = '';
+};
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') window.closePicViewer();
+});
 
 // ── Download any file (blob trick for cross-origin) ──
 window.dlFile = async (url, name) => {

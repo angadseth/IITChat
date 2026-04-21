@@ -1892,10 +1892,40 @@ function mpLoadInsta(shortcode, type) {
   el('yt-player').innerHTML = '';
   el('mp-player-wrap').classList.remove('hidden');
   el('yt-player').classList.add('hidden');
+  el('spotify-player-wrap')?.classList.add('hidden');
   const wrap = el('insta-player-wrap');
   wrap.classList.remove('hidden');
   const embedUrl = `https://www.instagram.com/${type}/${shortcode}/embed/`;
   el('insta-frame').src = embedUrl;
+}
+
+// ── Spotify helpers ──
+function extractSpotify(raw) {
+  // matches open.spotify.com/{type}/{id} with optional query string
+  const m = raw.match(/open\.spotify\.com\/(track|album|playlist|artist|episode|show)\/([A-Za-z0-9]+)/);
+  if (m) return { spType: m[1], spId: m[2] };
+  return null;
+}
+
+window.mpPlaySpotify = async function(spType, spId) {
+  if (!CCI) { toast('Open a chat first'); return; }
+  await set(ref(db, musicPath()), {
+    mediaType: 'spotify', spType, spId,
+    by: CU.uid, ts: Date.now()
+  });
+  if (!mpOpen) window.toggleMusic();
+  toast('🎵 Sharing Spotify!');
+};
+
+function mpLoadSpotify(spType, spId) {
+  el('yt-player').innerHTML = '';
+  el('mp-player-wrap').classList.remove('hidden');
+  el('yt-player').classList.add('hidden');
+  el('insta-player-wrap')?.classList.add('hidden');
+  const wrap = el('spotify-player-wrap');
+  wrap.classList.remove('hidden');
+  el('spotify-frame').src =
+    `https://open.spotify.com/embed/${spType}/${spId}?utm_source=generator&theme=0`;
 }
 
 // ── search via multiple free APIs ──
@@ -1939,6 +1969,14 @@ function normaliseInvidious(data) {
 window.mpSearch = async function () {
   const raw = el('mp-search-inp').value.trim();
   if (!raw) return;
+
+  // Spotify link → share directly
+  const sp = extractSpotify(raw);
+  if (sp) {
+    window.mpPlaySpotify(sp.spType, sp.spId);
+    el('mp-search-inp').value = '';
+    return;
+  }
 
   // Instagram link → share directly
   const insta = extractInsta(raw);
@@ -2094,13 +2132,18 @@ window.mpStop = async function () {
   el('mp-now-title').textContent = '';
   el('insta-frame').src = '';
   el('insta-player-wrap').classList.add('hidden');
+  el('spotify-frame').src = '';
+  el('spotify-player-wrap')?.classList.add('hidden');
   el('yt-player').classList.remove('hidden');
   mpLastVid = null;
 };
 
 function renderNowPlaying(m) {
-  el('mp-now-title').textContent = m.title || 'Now Playing';
-  if (m.mediaType === 'instagram') {
+  el('mp-now-title').textContent =
+    m.mediaType === 'spotify'   ? `🎵 Spotify — ${m.spType}` :
+    m.mediaType === 'instagram' ? '📸 Instagram' :
+    (m.title || 'Now Playing');
+  if (m.mediaType === 'instagram' || m.mediaType === 'spotify') {
     el('mp-np-thumb').src = '';
     el('mp-np-thumb').style.display = 'none';
   } else {
@@ -2176,6 +2219,16 @@ function startMusicSync(chatId) {
     mpLastFB = m;
     renderNowPlaying(m);
 
+    // ── Spotify embed ──
+    if (m.mediaType === 'spotify') {
+      const key = m.spType + m.spId;
+      if (key !== mpLastVid) {
+        mpLastVid = key;
+        mpLoadSpotify(m.spType, m.spId);
+      }
+      return;
+    }
+
     // ── Instagram embed (no seek sync — just show) ──
     if (m.mediaType === 'instagram') {
       const key = m.shortcode + m.instaType;
@@ -2188,6 +2241,7 @@ function startMusicSync(chatId) {
 
     // ── YouTube ──
     el('insta-player-wrap')?.classList.add('hidden');
+    el('spotify-player-wrap')?.classList.add('hidden');
     el('yt-player').classList.remove('hidden');
     const fromMe = m.by === CU?.uid;
 

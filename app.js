@@ -1967,44 +1967,50 @@ function normaliseInvidious(data) {
 }
 
 window.mpSearch = async function () {
-  const raw = el('mp-search-inp').value.trim();
-  if (!raw) return;
+  let searchQ = el('mp-search-inp').value.trim();
+  if (!searchQ) return;
 
-  // Spotify link → share directly
-  const sp = extractSpotify(raw);
+  const res = el('mp-results');
+
+  // Spotify link → fetch track title via oEmbed → search YouTube for full song
+  const sp = extractSpotify(searchQ);
   if (sp) {
-    window.mpPlaySpotify(sp.spType, sp.spId);
-    el('mp-search-inp').value = '';
-    return;
+    res.innerHTML = '<div class="mp-loading"><span class="mp-spin"></span> Finding full song on YouTube…</div>';
+    try {
+      const oe = await fetch(`https://open.spotify.com/oembed?url=https://open.spotify.com/${sp.spType}/${sp.spId}`);
+      if (oe.ok) { const d = await oe.json(); if (d.title) searchQ = d.title; }
+    } catch (_) {}
+    el('mp-search-inp').value = searchQ;
+    // fall through to YouTube search below
   }
 
   // Instagram link → share directly
-  const insta = extractInsta(raw);
-  if (insta) {
-    window.mpPlayInsta(insta.shortcode, insta.type);
-    el('mp-search-inp').value = '';
-    return;
+  if (!sp) {
+    const insta = extractInsta(searchQ);
+    if (insta) {
+      window.mpPlayInsta(insta.shortcode, insta.type);
+      el('mp-search-inp').value = '';
+      return;
+    }
+
+    // YouTube URL pasted → play directly
+    const directVid = extractVid(searchQ);
+    if (directVid) {
+      let title = searchQ;
+      try {
+        const oe = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${directVid}&format=json`);
+        if (oe.ok) { const d = await oe.json(); title = d.title || searchQ; }
+      } catch (_) {}
+      mpPlay(directVid, title);
+      return;
+    }
   }
 
-  // If user pasted a YouTube URL → play directly
-  const directVid = extractVid(raw);
-  if (directVid) {
-    // fetch title via oEmbed so receiver sees a real name
-    let title = raw;
-    try {
-      const oe = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${directVid}&format=json`);
-      if (oe.ok) { const d = await oe.json(); title = d.title || raw; }
-    } catch (_) {}
-    mpPlay(directVid, title);
-    return;
-  }
-
-  const res = el('mp-results');
   res.innerHTML = '<div class="mp-loading"><span class="mp-spin"></span> Searching…</div>';
 
   let results = [];
   for (const ep of SEARCH_ENDPOINTS) {
-    const { url, type } = ep(raw);
+    const { url, type } = ep(searchQ);
     try {
       const r = await fetch(url, { signal: AbortSignal.timeout(5000) });
       if (!r.ok) continue;

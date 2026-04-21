@@ -174,13 +174,23 @@
             <button class="ib" id="gib" title="Group Info" onclick="openGI()" style="display:none">
               <i class="fa fa-info-circle"></i>
             </button>
-            <button class="ib" id="mpb" title="Shared Music" onclick="toggleMusic()">🎵</button>
-            <button class="ib" id="drb" title="Live Draw" onclick="toggleDraw()">🎨</button>
-            <button class="ib" id="ss-btn" title="Share screen" onclick="startSS()"><i class="fa fa-desktop"></i></button>
-            <button class="ib" title="Snake &amp; Ladders" onclick="openGame()">🎲</button>
-          <button class="ib" id="lrb" title="Live Reaction" onclick="toggleLRP()">❤️</button>
+            <button class="ib" id="mpb" title="Shared Music" onclick="toggleMusic()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+            </button>
+            <button class="ib" id="drb" title="Live Draw" onclick="toggleDraw()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
+            </button>
+            <button class="ib" id="ss-btn" title="Share screen" onclick="startSS()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+            </button>
+            <button class="ib" title="Snake &amp; Ladders" onclick="openGame()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="4"/><circle cx="8" cy="8" r="1.2" fill="currentColor"/><circle cx="16" cy="8" r="1.2" fill="currentColor"/><circle cx="8" cy="16" r="1.2" fill="currentColor"/><circle cx="16" cy="16" r="1.2" fill="currentColor"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/></svg>
+            </button>
+            <button class="ib" id="lrb" title="Live Reaction" onclick="toggleLRP()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+            </button>
             <button class="ib" title="Clear Chat" onclick="clearChat()">
-              <i class="fa fa-trash"></i>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
             </button>
             <div class="lrp hidden" id="lrp"></div>
           </div>

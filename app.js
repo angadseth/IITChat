@@ -1972,38 +1972,62 @@ window.mpSearch = async function () {
 
   const res = el('mp-results');
 
-  // Spotify link → fetch track title via oEmbed → search YouTube for full song
-  const sp = extractSpotify(searchQ);
-  if (sp) {
-    res.innerHTML = '<div class="mp-loading"><span class="mp-spin"></span> Finding full song on YouTube…</div>';
-    try {
-      const oe = await fetch(`https://open.spotify.com/oembed?url=https://open.spotify.com/${sp.spType}/${sp.spId}`);
-      if (oe.ok) { const d = await oe.json(); if (d.title) searchQ = d.title; }
-    } catch (_) {}
-    el('mp-search-inp').value = searchQ;
-    // fall through to YouTube search below
+  // Instagram link → share directly
+  const insta = extractInsta(searchQ);
+  if (insta) {
+    window.mpPlayInsta(insta.shortcode, insta.type);
+    el('mp-search-inp').value = '';
+    return;
   }
 
-  // Instagram link → share directly
-  if (!sp) {
-    const insta = extractInsta(searchQ);
-    if (insta) {
-      window.mpPlayInsta(insta.shortcode, insta.type);
-      el('mp-search-inp').value = '';
-      return;
-    }
+  // YouTube URL pasted → play directly
+  const directVid = extractVid(searchQ);
+  if (directVid) {
+    let title = searchQ;
+    try {
+      const oe = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${directVid}&format=json`);
+      if (oe.ok) { const d = await oe.json(); title = d.title || searchQ; }
+    } catch (_) {}
+    mpPlay(directVid, title);
+    return;
+  }
 
-    // YouTube URL pasted → play directly
-    const directVid = extractVid(searchQ);
-    if (directVid) {
-      let title = searchQ;
+  // Spotify link → get title via multiple methods → auto-play first YouTube result
+  const sp = extractSpotify(searchQ);
+  if (sp) {
+    res.innerHTML = '<div class="mp-loading"><span class="mp-spin"></span> Finding on YouTube…</div>';
+    // try oEmbed for title
+    let spTitle = '';
+    try {
+      const oe = await fetch(
+        `https://open.spotify.com/oembed?url=https://open.spotify.com/${sp.spType}/${sp.spId}`,
+        { signal: AbortSignal.timeout(4000) }
+      );
+      if (oe.ok) { const d = await oe.json(); spTitle = d.title || ''; }
+    } catch (_) {}
+    // if oEmbed failed (CORS etc), use the raw URL as search query — still better than nothing
+    searchQ = spTitle || searchQ;
+    el('mp-search-inp').value = searchQ;
+    // search YouTube and AUTO-PLAY the first result (no manual click needed)
+    let autoResult = null;
+    for (const ep of SEARCH_ENDPOINTS) {
+      const { url, type } = ep(searchQ);
       try {
-        const oe = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${directVid}&format=json`);
-        if (oe.ok) { const d = await oe.json(); title = d.title || searchQ; }
+        const r = await fetch(url, { signal: AbortSignal.timeout(5000) });
+        if (!r.ok) continue;
+        const data = await r.json();
+        const list = type === 'piped' ? normalisePiped(data) : normaliseInvidious(data);
+        if (list.length) { autoResult = list[0]; break; }
       } catch (_) {}
-      mpPlay(directVid, title);
-      return;
     }
+    if (autoResult) {
+      mpPlay(autoResult.vid, autoResult.title, autoResult.thumb);
+      res.innerHTML = '';
+      el('mp-search-inp').value = '';
+    } else {
+      res.innerHTML = `<div class="mp-loading">Song not found on YouTube — try searching manually</div>`;
+    }
+    return;
   }
 
   res.innerHTML = '<div class="mp-loading"><span class="mp-spin"></span> Searching…</div>';

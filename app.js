@@ -358,7 +358,7 @@ function loadContacts() {
         const lm  = snap.val();
         const pip = item.querySelector('.cip');
         const cit = item.querySelector('.cit');
-        if (pip) pip.textContent = lmPreview(lm);
+        if (pip) pip.innerHTML = lmPreview(lm, lm ? (lm.sender === CU?.uid ? 'You' : u.name.split(' ')[0]) : '');
         if (cit) cit.textContent = lm ? fmtTime(lm.ts) : '';
       }));
 

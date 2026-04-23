@@ -246,9 +246,6 @@ onAuthStateChanged(auth, u => {
 
     goOnline();
 
-    document.addEventListener('visibilitychange', () => {
-      document.hidden ? goOffline() : goOnline();
-    });
     window.addEventListener('beforeunload', () => { goOffline(); });
 
     // Load profile in background — doesn't block app open

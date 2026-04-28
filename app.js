@@ -1741,37 +1741,14 @@ window.doSendFile = async () => {
       if (caption) data.caption = caption;
       await sendData(data);
     } else {
-      // Video / file via Firebase Storage with real progress
-      const safeName = file.name.replace(/[#\[\]*?]/g, '_');
-      const storageRef = sRef(storage, `uploads/${CU.uid}/${Date.now()}_${safeName}`);
-      const task = uploadBytesResumable(storageRef, file);
-      await new Promise((resolve, reject) => {
-        task.on('state_changed',
-          snap => {
-            const pct = Math.round(snap.bytesTransferred / snap.totalBytes * 100);
-            progBar.style.width = pct + '%';
-            progTxt.textContent = `Uploading… ${pct}%`;
-          },
-          err => {
-            console.error('Storage upload error:', err.code, err.message);
-            if (err.code === 'storage/unauthorized')
-              reject(new Error('❌ Firebase Storage rules block uploads — fix rules in Firebase Console (Storage → Rules)'));
-            else if (err.code === 'storage/quota-exceeded')
-              reject(new Error('❌ Firebase Storage quota full'));
-            else if (err.code === 'storage/canceled')
-              reject(new Error('❌ Upload cancelled'));
-            else
-              reject(new Error(`❌ Upload failed: ${err.code || err.message}`));
-          },
-          () => {  // ← NOT async — errors were silently swallowed before
-            getDownloadURL(task.snapshot.ref).then(url => {
-              const data = { type: msgType, url, name: file.name, size: file.size, mime: file.type };
-              if (caption) data.caption = caption;
-              return sendData(data);
-            }).then(resolve).catch(reject);
-          }
-        );
+      // Video / file — upload via gofile.io (free CDN, no rules needed)
+      const url = await uploadGoFile(file, (pct) => {
+        progBar.style.width = pct + '%';
+        progTxt.textContent = `Uploading… ${pct}%`;
       });
+      const data = { type: msgType, url, name: file.name, size: file.size, mime: file.type };
+      if (caption) data.caption = caption;
+      await sendData(data);
     }
     progBar.style.width = '100%';
     progTxt.textContent = '✅ Sent!';
@@ -1785,6 +1762,41 @@ window.doSendFile = async () => {
     toast('❌ ' + (err.message || 'Upload failed'));
   }
 };
+
+// ── gofile.io upload — free CDN, no API key, real progress via XHR ──
+async function uploadGoFile(file, onProgress) {
+  // get best available upload server
+  const srvRes = await fetch('https://api.gofile.io/servers');
+  if (!srvRes.ok) throw new Error('Could not reach upload server');
+  const srvJson = await srvRes.json();
+  const server  = srvJson.data?.servers?.[0]?.name;
+  if (!server) throw new Error('No upload server available');
+
+  return new Promise((resolve, reject) => {
+    const form = new FormData();
+    form.append('file', file);
+
+    const xhr = new XMLHttpRequest();
+    xhr.upload.onprogress = e => {
+      if (e.lengthComputable) onProgress(Math.round(e.loaded / e.total * 100));
+    };
+    xhr.onload = () => {
+      try {
+        const res = JSON.parse(xhr.responseText);
+        if (res.status === 'ok') {
+          const url = res.data?.link || res.data?.downloadLink;
+          if (url) resolve(url);
+          else reject(new Error('No download URL in response'));
+        } else {
+          reject(new Error('Upload failed: ' + (res.status || xhr.responseText)));
+        }
+      } catch (e) { reject(new Error('Invalid server response')); }
+    };
+    xhr.onerror = () => reject(new Error('Network error — check internet connection'));
+    xhr.open('POST', `https://${server}.gofile.io/contents/uploadfile`);
+    xhr.send(form);
+  });
+}
 
 function fmtSize(bytes) {
   if (!bytes) return '';

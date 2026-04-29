@@ -612,16 +612,24 @@ body {
 
 /* ── Scroll-to-bottom button ── */
 .scroll-btn {
-  position: absolute; bottom: 14px; right: 14px;
-  width: 38px; height: 38px; border-radius: 50%;
+  position: absolute; bottom: 16px; right: 14px;
+  width: 42px; height: 42px; border-radius: 50%;
   background: var(--accent); border: none; color: #fff;
   cursor: pointer; z-index: 15;
   display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 3px 14px rgba(0,0,0,0.4);
-  font-size: 15px; transition: var(--tr);
+  box-shadow: 0 4px 18px rgba(108,99,255,0.5);
+  font-size: 16px; transition: transform .18s, box-shadow .18s;
   animation: badgePop 0.2s ease;
 }
-.scroll-btn:hover { opacity: 0.85; transform: scale(1.08); }
+.scroll-btn:hover { transform: scale(1.1); box-shadow: 0 6px 24px rgba(108,99,255,0.7); }
+.scb-badge {
+  position: absolute; top: -5px; right: -5px;
+  background: #ff4f6b; color: #fff;
+  font-size: 9px; font-weight: 700; min-width: 17px; height: 17px;
+  border-radius: 10px; display: flex; align-items: center; justify-content: center;
+  padding: 0 4px; border: 2px solid var(--bg);
+  animation: badgePop .2s ease;
+}
 .ir { display: flex; align-items: flex-end; gap: 8px; position: relative; }
 
 .iw {

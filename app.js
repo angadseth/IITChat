@@ -84,6 +84,8 @@ let pendingFile = null;   // { file, msgType, folder }
 let otherSeenUpTo = 0;   // timestamp: up to which ts the other user has seen
 let seenUnsubFn   = null; // firebase listener cleanup
 let lastMsgTs     = 0;   // ts of last message currently rendered in chat
+let chatFirstLoad = true; // true on first load of a chat — always scroll to bottom
+let newMsgCount   = 0;    // unread new messages while user is scrolled up
 
 // register visibilitychange once at module level — marks seen when user tabs back in
 document.addEventListener('visibilitychange', () => {
@@ -485,6 +487,8 @@ async function openChat(uid, u) {
   // ── message seen tracking ──
   otherSeenUpTo = 0;
   lastMsgTs = 0;
+  chatFirstLoad = true;
+  newMsgCount = 0;
   if (seenUnsubFn) { seenUnsubFn(); seenUnsubFn = null; }
   // listen to other user's seen timestamp — stored inside the shared chat node
   seenUnsubFn = onValue(ref(db, `chats/${CCI}/seenBy/${uid}`), snap => {
@@ -504,6 +508,12 @@ function loadMsgs() {
   area.innerHTML = '';
 
   unsub = onValue(ref(db, `chats/${CCI}/messages`), snap => {
+    // save position before clearing so we can restore if user was reading old msgs
+    const prevScrollHeight = area.scrollHeight;
+    const prevScrollTop    = area.scrollTop;
+    const wasAtBottom = chatFirstLoad ||
+      (area.scrollHeight - area.scrollTop - area.clientHeight < 120);
+
     area.innerHTML = '';
     const msgs = snap.val();
     if (!msgs) return;
@@ -524,9 +534,24 @@ function loadMsgs() {
       area.appendChild(mkMsg(msg, isMe, con));
       prevSender = msg.sender;
     });
-    // track last rendered message ts — this is what we write as "seen up to"
+
     lastMsgTs = sortedMsgs.at(-1)?.ts || 0;
-    area.scrollTop = area.scrollHeight;
+
+    if (wasAtBottom) {
+      // user was at bottom — follow new messages
+      area.scrollTop = area.scrollHeight;
+      newMsgCount = 0;
+      updateScrollBadge();
+    } else {
+      // user is reading old messages — restore their scroll position
+      area.scrollTop = prevScrollTop + (area.scrollHeight - prevScrollHeight);
+      if (!chatFirstLoad) {
+        newMsgCount++;
+        updateScrollBadge();
+      }
+    }
+
+    chatFirstLoad = false;
     checkScrollBtn();
     if (!isGroup && document.visibilityState === 'visible') { markChatSeen(); updateAllTicks(); }
   });
@@ -564,11 +589,26 @@ function checkScrollBtn() {
   if (!area || !btn) return;
   const distFromBottom = area.scrollHeight - area.scrollTop - area.clientHeight;
   btn.classList.toggle('hidden', distFromBottom < 80);
+  if (distFromBottom < 80) { newMsgCount = 0; updateScrollBadge(); }
+}
+
+function updateScrollBadge() {
+  const btn = el('scroll-btn');
+  if (!btn) return;
+  let badge = btn.querySelector('.scb-badge');
+  if (newMsgCount > 0) {
+    if (!badge) { badge = document.createElement('span'); badge.className = 'scb-badge'; btn.appendChild(badge); }
+    badge.textContent = newMsgCount > 99 ? '99+' : newMsgCount;
+  } else {
+    badge?.remove();
+  }
 }
 
 window.scrollToBottom = function () {
   const area = el('ma');
   area.scrollTo({ top: area.scrollHeight, behavior: 'smooth' });
+  newMsgCount = 0;
+  updateScrollBadge();
 };
 
 // Attach scroll listener once

@@ -896,16 +896,17 @@ body {
 .sf-title { font-size: 15px; font-weight: 700; }
 .sf-preview {
   flex: 1; display: flex; align-items: center; justify-content: center;
-  background: var(--bg1); min-height: 200px; max-height: 55vh;
+  background: var(--bg1); min-height: 260px; max-height: 60vh;
   overflow: hidden;
 }
 .sf-img-prev {
-  max-width: 100%; max-height: 55vh;
+  max-width: 100%; max-height: 60vh;
   object-fit: contain; display: block;
+  border-radius: 4px;
 }
 .sf-vid-prev {
-  max-width: 100%; max-height: 55vh;
-  outline: none;
+  max-width: 100%; max-height: 60vh;
+  outline: none; border-radius: 4px;
 }
 .sf-file-prev {
   display: flex; flex-direction: column; align-items: center; gap: 10px;

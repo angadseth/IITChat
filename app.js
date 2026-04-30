@@ -1765,31 +1765,15 @@ window.doSendFile = async () => {
   progWrap.classList.remove('hidden');
 
   try {
-    if (msgType === 'image' || msgType === 'viewonce') {
-      // Images via ImgBB (faster, no progress but keep it simple)
-      progBar.style.width = '40%';
-      progTxt.textContent = 'Uploading… please wait';
-      const b64  = await toBase64(file);
-      const form = new FormData();
-      form.append('image', b64.split(',')[1]);
-      const res  = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_KEY}`, { method:'POST', body:form });
-      const json = await res.json();
-      if (!json.success) throw new Error(json.error?.message || 'Upload failed');
-      progBar.style.width = '90%';
-      const data = { type: 'image', url: json.data.url, name: file.name, size: file.size };
-      if (msgType === 'viewonce') data.viewOnce = true;
-      if (caption) data.caption = caption;
-      await sendData(data);
-    } else {
-      // Video / file — upload via gofile.io (free CDN, no rules needed)
-      const url = await uploadGoFile(file, (pct) => {
-        progBar.style.width = pct + '%';
-        progTxt.textContent = `Uploading… ${pct}%`;
-      });
-      const data = { type: msgType, url, name: file.name, size: file.size, mime: file.type };
-      if (caption) data.caption = caption;
-      await sendData(data);
-    }
+    // All files (images, videos, docs) via gofile.io — real progress, no rules needed
+    const url = await uploadGoFile(file, (pct) => {
+      progBar.style.width = pct + '%';
+      progTxt.textContent = `Uploading… ${pct}%`;
+    });
+    const data = { type: msgType === 'viewonce' ? 'image' : msgType, url, name: file.name, size: file.size, mime: file.type };
+    if (msgType === 'viewonce') data.viewOnce = true;
+    if (caption) data.caption = caption;
+    await sendData(data);
     progBar.style.width = '100%';
     progTxt.textContent = '✅ Sent!';
     setTimeout(() => { el('sfm').classList.remove('show'); pendingFile = null; }, 500);

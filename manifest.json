@@ -1,0 +1,14 @@
+{
+  "name": "IIT Chat",
+  "short_name": "IITChat",
+  "description": "Private real-time chat",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0d0d1a",
+  "theme_color": "#6c63ff",
+  "icons": [
+    { "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

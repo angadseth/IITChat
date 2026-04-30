@@ -1166,6 +1166,94 @@ body {
   }
   .sidebar.hidden-mob { transform: translateX(-100%); }
   .ca { position: absolute; inset: 0; }
+
+  /* ── Native app feel on mobile ── */
+
+  /* smooth momentum scroll */
+  .ma, .cl { -webkit-overflow-scrolling: touch; }
+
+  /* hide scrollbars on mobile */
+  .ma::-webkit-scrollbar, .cl::-webkit-scrollbar { display: none; }
+
+  /* chat header — taller, more native */
+  .chd {
+    padding: 10px 12px;
+    min-height: 60px;
+    border-bottom: 1px solid var(--border);
+  }
+  .chav { width: 40px; height: 40px; }
+  .chn  { font-size: 15px; }
+  .chs  { font-size: 11px; }
+
+  /* header icon buttons — bigger touch target */
+  .ib { width: 40px; height: 40px; border-radius: 12px; }
+  .ib svg { width: 18px; height: 18px; }
+  .ib:hover { background: var(--bg3); color: var(--text2); transform: none; box-shadow: none; }
+  .ib:active::before { opacity: 1; }
+  .ib:active { transform: scale(0.92); }
+
+  /* input area — WhatsApp style */
+  .ia {
+    padding: 10px 10px;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom));
+    background: var(--bg2);
+    gap: 8px;
+  }
+  .msgi {
+    font-size: 15px;
+    padding: 10px 14px;
+    border-radius: 22px;
+    min-height: 42px;
+    max-height: 120px;
+  }
+  /* send button — big round tap target */
+  .sb {
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    font-size: 16px;
+  }
+  /* attach button */
+  .atb {
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  /* message bubbles — more padding, rounder */
+  .bub {
+    font-size: 14px;
+    padding: 9px 13px;
+    border-radius: 18px;
+    max-width: 80vw;
+  }
+
+  /* contact list items — taller for fat fingers */
+  .ci { padding: 11px 14px; min-height: 64px; }
+  .ciav { width: 46px; height: 46px; }
+  .cin { font-size: 14px; }
+  .cip { font-size: 12px; }
+
+  /* sidebar top bar */
+  .sbh { padding: 14px 14px; min-height: 58px; }
+  .sbt { font-size: 20px; }
+
+  /* scroll to bottom button — higher above keyboard */
+  .scroll-btn { bottom: 80px; width: 46px; height: 46px; }
+
+  /* toolbar buttons in header — wrap if needed */
+  .chd > div:last-child { gap: 4px; flex-wrap: nowrap; overflow-x: auto; padding-right: 2px; }
+
+  /* date label */
+  .dl { font-size: 11px; padding: 3px 10px; }
+
+  /* message time */
+  .mm { font-size: 10px; }
+
+  /* remove hover-only effects — use active instead */
+  .ci:hover { background: none; }
+  .ci:active { background: var(--bg3); }
+  .bub-act { opacity: 0.6; }
 }
 
 

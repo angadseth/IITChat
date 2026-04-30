@@ -602,5 +602,26 @@
 </div>
 
 <script src="app.js" type="module"></script>
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').then(reg => {
+    reg.addEventListener('updatefound', () => {
+      const nw = reg.installing;
+      nw.addEventListener('statechange', () => {
+        if (nw.state === 'activated' && navigator.serviceWorker.controller) {
+          // new version is live — show toast then reload
+          const t = document.createElement('div');
+          t.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#6c63ff;color:#fff;padding:10px 22px;border-radius:20px;font-size:13px;font-weight:600;z-index:99999;box-shadow:0 4px 18px rgba(108,99,255,.5)';
+          t.textContent = '✨ App updated — reloading…';
+          document.body.appendChild(t);
+          setTimeout(() => location.reload(), 1200);
+        }
+      });
+    });
+  });
+  // if SW controller changes (skipWaiting from another tab), reload this tab too
+  navigator.serviceWorker.addEventListener('controllerchange', () => location.reload());
+}
+</script>
 </body>
 </html>

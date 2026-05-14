@@ -434,6 +434,7 @@ async function openChat(uid, u) {
   el('chav').onclick = u.photoURL ? () => openPicViewer(u.photoURL) : null;
   el('chav').style.cursor = u.photoURL ? 'zoom-in' : '';
   el('chn').textContent  = u.name;
+  el('chem').textContent = u.email || '';
 
   const chs = el('chs');
   let contactOnline = false;
@@ -1232,6 +1233,7 @@ async function openGroupChat(gid, g) {
 
   el('chav').innerHTML        = g.avatar || '👥';
   el('chn').textContent       = g.name;
+  el('chem').textContent      = '';
   el('gib').style.display     = 'flex';   // show group info button
 
   const mUids = Object.keys(g.members || {});

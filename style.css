@@ -451,6 +451,7 @@ body {
 .chn { font-size: 15px; font-weight: 700; }
 .chs { font-size: 11px; color: var(--text2); }
 .chs.on { color: var(--online); }
+.chem { font-size: 10px; color: var(--text3); letter-spacing: 0.01em; margin-top: 1px; }
 
 /* ── MESSAGES ── */
 .ma-wrap { flex: 1; position: relative; min-height: 0; display: flex; flex-direction: column; }
